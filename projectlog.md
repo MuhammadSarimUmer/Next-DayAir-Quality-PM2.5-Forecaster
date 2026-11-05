@@ -1,0 +1,463 @@
+# Project Log
+
+## Project overview
+
+This project forecasts the PM2.5 concentration in Karachi and Lahore,
+Pakistan, 24 hours into the future. The workflow combines city-level PM2.5
+observations with hourly weather, time-based variables, and recent PM2.5
+history.
+
+The project is designed as a chronological forecasting problem. This matters
+because a forecasting model must only use information that would have been
+available at prediction time. Randomly mixing past and future rows would make
+the evaluation unrealistically optimistic.
+
+## Progress summary
+
+### Completed
+
+- Data-source selection and documentation
+- OpenAQ PM2.5 collection
+- Open-Meteo weather collection
+- UTC-to-PKT timestamp conversion
+- Hourly alignment and PM2.5/weather merging
+- Sensor quality control and short-gap interpolation
+- Exploratory data analysis
+- Feature engineering
+- 24-hour shifted prediction target
+- Chronological train/validation/test split
+- Leakage checks and core pipeline tests
+
+### Partially completed
+
+- Project setup documentation exists in part, but the README, `.gitignore`,
+  and `.env.example` still need to be filled in.
+- A Git repository and branch rules have not been configured in this
+  workspace.
+- Station metadata and data-source documentation are now recorded in
+  [`DATA_SOURCES.md`](./DATA_SOURCES.md).
+
+### Not yet completed
+
+The modelling and product stages have not yet been implemented:
+
+- Preprocessing/model pipeline
+- Baseline metrics
+- Ridge and KNN tuning
+- Random Forest and LightGBM tuning
+- Model selection and final test evaluation
+- Error analysis
+- AQI advice module
+- Live-data inference
+- Streamlit application
+- FastAPI endpoint
+- Deployment
+- Final report, README polish, demo script, and slides
+
+## Step 1: Initial project setup
+
+### What was done
+
+The project was organized into source code, raw data, processed data,
+notebooks, reports, and tests:
+
+```text
+data/
+  raw/
+  processed/
+notebooks/
+reports/
+  figures/
+src/
+tests/
+```
+
+The dependency list was recorded in
+[`requirements.txt`](./requirements.txt). It includes pandas, NumPy,
+requests, python-dotenv, matplotlib, scikit-learn, LightGBM, joblib,
+Streamlit, FastAPI, Uvicorn, pytest, and jupytext.
+
+Configuration is centralized in
+[`src/config.py`](./src/config.py). This keeps paths, API settings, city
+coordinates, selected sensors, time ranges, cleaning thresholds, feature
+settings, and split proportions in one place.
+
+### Why this structure was chosen
+
+Separating raw and processed data prevents the original downloads from being
+silently modified. Centralized configuration also makes the data pipeline
+reproducible and avoids scattering important constants through multiple
+scripts.
+
+### Current limitation
+
+The setup stage is not fully complete. The following files are currently
+empty and should be completed before final submission:
+
+- [`README.md`](./README.md)
+- [`.gitignore`](./.gitignore)
+- [`.env.example`](./.env.example)
+
+The API key is loaded from the environment and must not be committed to the
+repository.
+
+## Step 2: Selecting stations and documenting sources
+
+### What was done
+
+The project uses multiple OpenAQ PM2.5 sensors in each city:
+
+- 12 sensors in Karachi
+- 18 sensors in Lahore
+
+The selected sensor IDs and station names are defined in
+[`src/config.py`](./src/config.py). The station metadata snapshot is stored in
+[`data/raw/stations_candidates.csv`](./data/raw/stations_candidates.csv).
+
+The source methodology, station table, licenses, coordinates, processing
+decisions, and limitations are documented in
+[`DATA_SOURCES.md`](./DATA_SOURCES.md).
+
+### Why multiple sensors were selected
+
+One sensor may fail, go offline, or represent only a small local area. Using
+multiple sensors gives better spatial coverage and reduces dependence on a
+single instrument. During cleaning, the available quality-controlled sensor
+values are averaged by city and hour to produce a city-level PM2.5 signal.
+
+The selected sensors are community/low-cost monitoring stations. They are not
+treated as reference-grade regulatory instruments. The resulting forecasts
+are therefore appropriate for forecasting and comparative analysis, not for
+official compliance reporting.
+
+## Step 3: Collecting raw data
+
+### PM2.5 collection
+
+[`src/collect.py`](./src/collect.py) downloads hourly PM2.5 observations from
+OpenAQ API v3 using the endpoint:
+
+```text
+/v3/sensors/{sensor_id}/hours
+```
+
+The OpenAQ API client is implemented in
+[`src/openaq_api.py`](./src/openaq_api.py). It:
+
+- Adds the API key from the environment
+- Uses retry handling for rate limits and temporary server failures
+- Applies a polite delay between successful requests
+- Raises an explicit error when the API key is missing or requests fail
+
+The requested collection period is configured as:
+
+```text
+2025-06-23 through 2026-10-31 UTC
+```
+
+Raw OpenAQ files are stored separately for each city and sensor in
+[`data/raw/`](./data/raw/).
+
+### Weather collection
+
+The same collection script downloads hourly weather from the Open-Meteo
+Historical Weather API:
+
+```text
+https://archive-api.open-meteo.com/v1/archive
+```
+
+Weather is collected for the city coordinates:
+
+- Karachi: 24.8607, 67.0011
+- Lahore: 31.5204, 74.3587
+
+The collected variables are:
+
+- `temperature_2m`
+- `relative_humidity_2m`
+- `surface_pressure`
+- `wind_speed_10m`
+- `precipitation`
+- `cloud_cover`
+- `wind_direction_10m`
+
+Weather timestamps are requested in GMT/UTC so they initially match the
+OpenAQ raw timestamps.
+
+### Why raw data is preserved
+
+The raw files are treated as immutable inputs. This makes it possible to
+repeat cleaning with different thresholds or correct a processing decision
+without downloading the source data again.
+
+## Step 4: Cleaning and merging the data
+
+The cleaning workflow is implemented in
+[`src/clean.py`](./src/clean.py).
+
+### Timestamp conversion
+
+Raw UTC timestamps are converted to Pakistan Standard Time using the
+`Asia/Karachi` timezone. The timezone is then removed from the stored
+timestamp because Pakistan does not currently use daylight-saving changes.
+
+This ensures that hourly patterns such as morning and evening pollution are
+analysed in local Pakistani time.
+
+### Sensor quality control
+
+For each sensor, the cleaning process:
+
+1. Removes duplicate timestamps.
+2. Creates a complete hourly index.
+3. Marks readings below `0` or above `1000` ug/m3 as invalid.
+4. Marks readings with less than 50% OpenAQ coverage as missing.
+5. Detects runs of at least eight identical consecutive readings as possible
+   stuck-sensor values.
+6. Averages the remaining sensor values for each city and hour.
+
+These rules remove clearly invalid values while avoiding aggressive
+interpolation of long outages.
+
+### Missing-value handling
+
+PM2.5 and weather are merged on the hourly PKT timestamp. Internal gaps of up
+to three hours are linearly interpolated. Longer gaps remain missing rather
+than being filled with an unjustified estimate.
+
+The cleaned data is written to
+[`data/processed/clean_hourly.csv`](./data/processed/clean_hourly.csv).
+The quality-control summary is written to
+[`reports/gap_report.csv`](./reports/gap_report.csv).
+
+### Current quality-control results
+
+| City | Hourly rows | Coverage | PM2.5 missing after cleaning | Missing percentage | Longest remaining gap |
+|---|---:|---|---:|---:|---:|
+| Karachi | 11,903 | 2025-06-23 05:00 to 2026-11-01 03:00 PKT | 78 | 0.66% | 67 hours |
+| Lahore | 11,903 | 2025-06-23 05:00 to 2026-11-01 03:00 PKT | 11 | 0.09% | 5 hours |
+
+The current report shows zero missing weather cells after processing.
+
+## Step 5: Exploratory data analysis
+
+The EDA is stored in
+[`notebooks/02_eda.ipynb`](./notebooks/02_eda.ipynb). The notebook has been
+executed and contains outputs for:
+
+1. PM2.5 time series by city
+2. Monthly PM2.5 distributions
+3. Mean hourly PM2.5 patterns
+4. Missing data by month and city
+5. 24-hour PM2.5 persistence
+6. Correlations between PM2.5 and weather variables
+7. AQI-category distributions
+
+Generated figures are stored in
+[`reports/figures/`](./reports/figures/):
+
+- `eda_timeseries.png`
+- `eda_monthly.png`
+- `eda_hourly.png`
+- `eda_missing.png`
+- `eda_corr.png`
+
+### Important EDA observations
+
+- Lahore has a higher average PM2.5 level than Karachi in the processed data.
+- PM2.5 has meaningful 24-hour persistence, supporting the use of lag
+  features.
+- Hour-of-day and month-of-year patterns are present, supporting calendar
+  features.
+- Weather variables show measurable relationships with PM2.5, although
+  correlation alone does not establish causation.
+- AQI categories are not evenly distributed between the two cities.
+
+These observations motivated the use of lagged PM2.5, rolling statistics,
+weather variables, and calendar variables in the model features.
+
+## Step 6: Feature engineering and target creation
+
+Feature generation is implemented in
+[`src/features.py`](./src/features.py).
+
+### Forecast target
+
+The prediction target is:
+
+```text
+target_pm25_t24h = PM2.5 at time t + 24 hours
+```
+
+The target is created with a negative 24-hour shift. Rows without sufficient
+history or a future target are removed.
+
+### Feature groups
+
+The current dataset contains 30 model features:
+
+#### Current and historical PM2.5
+
+- `pm25_now`
+- `pm25_lag_1h`
+- `pm25_lag_3h`
+- `pm25_lag_6h`
+- `pm25_lag_12h`
+- `pm25_lag_24h`
+
+#### Rolling PM2.5 statistics
+
+- `pm25_roll_mean_6h`
+- `pm25_roll_mean_24h`
+- `pm25_roll_mean_72h`
+- `pm25_diff_3h`
+- `pm25_roll_std_24h`
+- `pm25_roll_max_24h`
+
+#### Weather
+
+- `temperature_2m`
+- `relative_humidity_2m`
+- `surface_pressure`
+- `wind_speed_10m`
+- `precipitation`
+- `cloud_cover`
+
+#### Wind-direction encoding
+
+- `wind_dir_sin`
+- `wind_dir_cos`
+
+Wind direction is circular. Encoding it as sine and cosine prevents the model
+from treating 359 degrees and 1 degree as far apart.
+
+#### Weather-derived features
+
+- `pressure_change_24h`
+- `wind_speed_roll_mean_24h`
+- `precip_sum_24h`
+
+These represent recent pressure movement, recent wind stagnation, and recent
+rainfall accumulation.
+
+#### Calendar features
+
+- `hour`
+- `month`
+- `weekday`
+- `is_winter`
+- `hour_sin`
+- `hour_cos`
+
+The cyclic hour encoding represents the relationship between the end and
+beginning of a day. The winter flag represents the project-defined winter
+months: November, December, January, and February.
+
+#### City feature
+
+- `city`
+
+City is retained as a categorical feature so the model can learn systematic
+differences between Karachi and Lahore.
+
+The generated feature file is
+[`data/processed/features.csv`](./data/processed/features.csv). It contains
+the feature columns, `datetime_pkt`, and `target_pm25_t24h`.
+
+### Leakage prevention
+
+All lag and rolling features use only the current or earlier timestamps.
+The future PM2.5 value is used only as the target and is not included as an
+input feature.
+
+## Step 7: Chronological splitting
+
+The split is implemented in
+[`src/split.py`](./src/split.py).
+
+### Split policy
+
+The data is split chronologically into:
+
+- 70% training
+- 15% validation
+- 15% test
+
+The split is based on unique timestamps rather than randomly selecting rows.
+This keeps the evaluation representative of future forecasting.
+
+### Purge gap
+
+A 24-hour purge gap is applied at split boundaries. A row at time `t` has a
+target at `t + 24 hours`, so rows immediately before a boundary could have
+targets inside the next split. Removing those rows reduces target leakage
+across train, validation, and test.
+
+### Generated split files
+
+- [`data/processed/train.csv`](./data/processed/train.csv)
+- [`data/processed/val.csv`](./data/processed/val.csv)
+- [`data/processed/test.csv`](./data/processed/test.csv)
+- [`data/processed/split_info.json`](./data/processed/split_info.json)
+
+### Current split results
+
+| Split | Rows | Start | End |
+|---|---:|---|---|
+| Train | 16,278 | 2025-06-25 10:00 | 2026-06-05 01:00 |
+| Validation | 3,482 | 2026-06-06 02:00 | 2026-08-17 14:00 |
+| Test | 3,530 | 2026-08-18 15:00 | 2026-10-31 03:00 |
+
+The validation and test sets contain equal numbers of Karachi and Lahore rows.
+
+## Verification completed
+
+The tests in
+[`tests/test_pipeline_logic.py`](./tests/test_pipeline_logic.py) passed:
+
+```text
+3 passed
+```
+
+The tests verify that:
+
+- The 24-hour target and PM2.5 lag values are aligned correctly.
+- Feature names are unique and present in the generated data.
+- Train, validation, and test splits do not overlap through the 24-hour
+  target horizon.
+
+The test run produced pandas deprecation warnings for `t.dt.weekday`. These
+warnings do not currently fail the tests, but the expression should eventually
+be updated to `t.dt.day_of_week`.
+
+## Reproducible pipeline commands
+
+After setting `OPENAQ_API_KEY` in a local `.env` file, the data stages can be
+run in order:
+
+```text
+python -m src.collect
+python -m src.clean
+python -m src.features
+python -m src.split
+```
+
+The EDA notebook can then be opened and rerun from
+[`notebooks/02_eda.ipynb`](./notebooks/02_eda.ipynb).
+
+## Next recommended work
+
+The next implementation stage is modelling:
+
+1. Build the preprocessing pipeline with imputation, scaling, and categorical
+   encoding.
+2. Implement the tomorrow-equals-now baseline.
+3. Add MAE, RMSE, R2, per-city metrics, and AQI-category accuracy.
+4. Tune Ridge and KNN with time-series cross-validation.
+5. Tune Random Forest and LightGBM with time-series cross-validation.
+6. Select the winner using validation data.
+7. Evaluate the selected model once on the held-out test set.
+8. Save the final pipeline with joblib.
+
+The test set must remain untouched until model selection is complete.
