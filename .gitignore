@@ -25,10 +25,10 @@ sem-env/
 .ipynb_checkpoints/
 
 # Generated datasets and collection artifacts
-data/raw/*
-data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
+# data/raw/*
+# data/processed/*
+# !data/raw/.gitkeep
+# !data/processed/.gitkeep
 
 # Generated reports, plots, and experiment outputs
 reports/*
