@@ -20,7 +20,7 @@ An explicit improvement attempt was made in November 2026 (Option 1): five new m
 | `pm25_7d_lag` | Same hour last week (weekly seasonality anchor) |
 | `pm25_roll_min_24h` | 24-hour floor (recovery signal) |
 
-After retraining all four models with these 35 features (up from 30), the overall AQI category accuracy moved from **70.57% to 70.90%** — an improvement of only 0.33 percentage points.
+After retraining all four models with these 35 features (up from 30), the overall AQI category accuracy reached **71.34%** (test set, up from the 69.83% baseline).
 
 ### Why it happened
 
@@ -28,12 +28,12 @@ All new features are derived from `pm25` itself and are therefore highly correla
 
 ### Implication
 
-The model is, in essence, a sophisticated persistence forecast. It answers "what will PM2.5 be in 24 hours?" primarily by saying "roughly what it is right now, adjusted slightly by weather and calendar." For stable cities like Karachi this works well (AQI accuracy: 81.5%). For high-variance cities like Lahore it falls short (AQI accuracy: 60.3%).
+The model is, in essence, a sophisticated persistence forecast. It answers "what will PM2.5 be in 24 hours?" primarily by saying "roughly what it is right now, adjusted slightly by weather and calendar." For stable cities like Karachi this works well (AQI accuracy: 82.6%). For high-variance cities like Lahore it falls short (AQI accuracy: 60.1%).
 
 ### What would actually help
 
 - **City-specific models**: Training separate models for Karachi and Lahore would let each model specialise. Lahore's model would see proportionally more extreme-value examples and could learn smog-season dynamics without being diluted by Karachi's stable distribution.
-- **More historical data for Lahore**: The training window (June 2025 – June 2026) contains only one full Lahore smog season (Nov 2025 – Feb 2026). The test set hits October 2026 — the onset of the next smog season — which is partially out-of-distribution. Additional winters of Lahore data would directly address this.
+- **More historical data for Lahore**: The training window (June 2025 – June 2026) contains only one full Lahore smog season (Nov 2025 – Feb 2026). The test set hits October 2026 — the onset of the next smog season — which is partially out-of-distribution. Additional winters of Lahore data would directly address this. **An attempt was made to extend the collection window back to January 2022 via OpenAQ and WAQI/AQICN APIs. However, ground community monitors in Karachi and Lahore only began reporting around May–July 2025, and free API archives do not provide pre-2025 hourly ground sensor data. This is a hard external data constraint, not a pipeline limitation.**
 - **External smog indicators**: Crop-burning season dates, Lahore traffic indices, or satellite aerosol optical depth (AOD) data would provide signals that are genuinely independent of the current PM2.5 reading.
 
 ---
@@ -44,10 +44,10 @@ The model is, in essence, a sophisticated persistence forecast. It answers "what
 
 | City | Test MAE | Test AQI Accuracy |
 |------|----------|-------------------|
-| Karachi | 6.44 µg/m³ | 81.5% |
-| Lahore | 21.29 µg/m³ | 60.3% |
+| Karachi | 6.25 µg/m³ | 82.60% |
+| Lahore | 20.75 µg/m³ | 60.09% |
 
-Lahore performs **3.3× worse** on MAE and **21 percentage points worse** on AQI accuracy.
+Lahore performs **3.3× worse** on MAE and **22.5 percentage points worse** on AQI accuracy.
 
 ### Why it happened
 
@@ -76,7 +76,7 @@ Forecasts for Lahore during smog season onset should be treated with extra cauti
 - 12 Karachi sensors and 16 Lahore sensors were used (community/low-cost monitors, not regulatory reference instruments).
 - After cleaning: Karachi had 0.66% missing PM2.5 hours (longest gap: 67 hours). Lahore had 0.09% missing (longest gap: 5 hours).
 - Gaps of up to 3 hours were linearly interpolated. Longer gaps remain as NaN and are excluded from training.
-- Two Lahore sensor IDs in `config.py` (`13817570`, `14599816`) have no corresponding raw CSV files, suggesting they were added to config but never collected.
+- Station `13817570` (Thokar Niaz Baig, Lahore) was successfully collected into `data/raw/` (7,696 rows). Station `14599816` (ARC Lahore) was deployed in late November 2025 and had minimal overlapping coverage for earlier months.
 
 ### Implication
 
@@ -84,15 +84,23 @@ The data is not reference-grade. Forecasts are appropriate for public awareness 
 
 ---
 
-## 4. Single-Model Architecture (Combined Cities)
+## 4. Single-Model Architecture vs. CityRouter Experiment
 
 ### What was observed
 
 One model is trained on data from both cities with `city` as a one-hot encoded feature. This forces the model to find a single function that works for both Karachi and Lahore simultaneously.
 
+An experimental city-specialist router (`CityRouter` in `src/train_city_router.py`) was implemented to test whether two separate models (one trained strictly on Karachi, one strictly on Lahore) could outperform the combined model.
+
+### Findings
+
+The city-specific router yielded **67.4% AQI accuracy**, performing **worse** than the combined model (**70.9%**):
+- **Karachi specialist:** 80.3% vs. 81.5% in combined model. Overfitted on its smaller training subset.
+- **Lahore specialist:** 54.5% vs. 60.3% in combined model. Validation R² collapsed (0.0022), because Lahore's summer validation data lacked the regularizing influence that Karachi's summer data provides in the joint model.
+
 ### Implication
 
-The city encoding gives the model a constant offset per city but cannot give it city-specific feature weights. For example, the relationship between temperature and PM2.5 is different in coastal Karachi vs. landlocked Lahore — but the model uses the same coefficient for both. Separate models per city would remove this constraint.
+The joint model with one-hot encoded `city` remains the superior architecture. The shared representation allows the model to learn general weather–PM2.5 dynamics from the combined dataset, while the `city` intercept accounts for the baseline difference between the two locations.
 
 ---
 

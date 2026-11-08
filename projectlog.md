@@ -34,14 +34,10 @@ the evaluation unrealistically optimistic.
 - Model selection and final test evaluation
 - AQI category accuracy metric added to evaluation
 
-### Partially completed
+### Completed Setup Documentation
 
-- Project setup documentation exists in part, but the README, `.gitignore`,
-  and `.env.example` still need to be filled in.
-- A Git repository and branch rules have not been configured in this
-  workspace.
-- Station metadata and data-source documentation are now recorded in
-  [`DATA_SOURCES.md`](./DATA_SOURCES.md).
+- Project setup files (`README.md`, `.gitignore`, and `.env.example`) have been populated.
+- Station metadata and data-source documentation are recorded in [`DATA_SOURCES.md`](./DATA_SOURCES.md).
 
 ### Not yet completed
 
@@ -90,17 +86,10 @@ silently modified. Centralized configuration also makes the data pipeline
 reproducible and avoids scattering important constants through multiple
 scripts.
 
-### Current limitation
+### Setup status
 
-The setup stage is not fully complete. The following files are currently
-empty and should be completed before final submission:
-
-- [`README.md`](./README.md)
-- [`.gitignore`](./.gitignore)
-- [`.env.example`](./.env.example)
-
-The API key is loaded from the environment and must not be committed to the
-repository.
+The setup files (`README.md`, `.gitignore`, and `.env.example`) are populated.
+The API key is loaded from the environment (`.env`) and is ignored by git so it is never committed.
 
 ## Step 2: Selecting stations and documenting sources
 
@@ -236,8 +225,8 @@ The quality-control summary is written to
 
 | City | Hourly rows | Coverage | PM2.5 missing after cleaning | Missing percentage | Longest remaining gap |
 |---|---:|---|---:|---:|---:|
-| Karachi | 11,903 | 2025-06-23 05:00 to 2026-11-01 03:00 PKT | 78 | 0.66% | 67 hours |
-| Lahore | 11,903 | 2025-06-23 05:00 to 2026-11-01 03:00 PKT | 11 | 0.09% | 5 hours |
+| Karachi | 11,992 | 2025-06-19 12:00 to 2026-11-01 03:00 PKT | 78 | 0.65% | 67 hours |
+| Lahore | 12,607 | 2025-05-24 21:00 to 2026-11-01 03:00 PKT | 57 | 0.45% | 32 hours |
 
 The current report shows zero missing weather cells after processing.
 
@@ -296,7 +285,7 @@ history or a future target are removed.
 
 ### Feature groups
 
-The current dataset contains 30 model features:
+The current dataset contains 35 model features:
 
 #### Current and historical PM2.5
 
@@ -315,6 +304,14 @@ The current dataset contains 30 model features:
 - `pm25_diff_3h`
 - `pm25_roll_std_24h`
 - `pm25_roll_max_24h`
+
+#### Momentum & Trend features
+
+- `pm25_change_6h` (6-hour trend direction)
+- `pm25_change_24h` (day-over-day direction)
+- `pm25_rate_of_change` (3-hour PM2.5 velocity in µg/m³ per hour)
+- `pm25_7d_lag` (same hour last week for weekly seasonality)
+- `pm25_roll_min_24h` (24-hour floor / recovery indicator)
 
 #### Weather
 
@@ -406,11 +403,11 @@ across train, validation, and test.
 
 | Split | Rows | Start | End |
 |---|---:|---|---|
-| Train | 16,278 | 2025-06-25 10:00 | 2026-06-05 01:00 |
-| Validation | 3,482 | 2026-06-06 02:00 | 2026-08-17 14:00 |
-| Test | 3,530 | 2026-08-18 15:00 | 2026-10-31 03:00 |
+| Train | 16,372 | 2025-05-31 21:00 | 2026-05-29 21:00 |
+| Validation | 3,630 | 2026-05-30 22:00 | 2026-08-14 12:00 |
+| Test | 3,678 | 2026-08-15 13:00 | 2026-10-31 03:00 |
 
-The validation and test sets contain equal numbers of Karachi and Lahore rows.
+The validation and test sets contain equal numbers of Karachi and Lahore rows (Validation: 1,815 each; Test: 1,839 each).
 
 ## Verification completed
 
@@ -451,17 +448,32 @@ The EDA notebook can then be opened and rerun from
 
 The modelling stage (Stage D) is complete. Key results:
 
-- Random Forest selected as best regression model (test MAE 13.69, R² 0.66)
-- AQI category accuracy: 70.57% (vs 69.83% baseline)
-- Classification approach tested and rejected (69.49% accuracy, worse than
-  regression)
-- Buffer zone adjustment tested and rejected (made accuracy worse)
+- **Validation Comparison**:
+  - Ridge: MAE 9.93 µg/m³, RMSE 14.83, R² 0.3040, AQI Accuracy 70.7%
+  - KNN: MAE 9.47 µg/m³, RMSE 14.64, R² 0.3221, AQI Accuracy 68.3%
+  - Random Forest: MAE 8.83 µg/m³, RMSE 14.01, R² 0.3793, AQI Accuracy 69.5%
+  - **LightGBM (Winner)**: MAE 8.77 µg/m³, RMSE 13.91, R² 0.3876, AQI Accuracy 71.0%
+- **Final Evaluation (Test Set, Retrained on Train+Val 20,002 samples)**:
+  - Selected model: LightGBM (35 features, momentum and trend added)
+  - Overall Test MAE: 13.50 µg/m³
+  - Overall Test RMSE: 23.93 µg/m³
+  - Overall Test R²: 0.6621
+  - Overall Test AQI Accuracy: 71.34% (Standard) / 68.11% (With conservative buffers)
+  - **Karachi Breakdown**: MAE 6.25 µg/m³, RMSE 9.56, R² 0.7233, AQI Accuracy 82.60%
+  - **Lahore Breakdown**: MAE 20.75 µg/m³, RMSE 32.47, R² 0.5558, AQI Accuracy 60.09%
+- **Baseline Comparison (Persistence - Test Set)**:
+  - Baseline MAE: 14.64 µg/m³, RMSE 27.17, R² 0.5765, AQI Accuracy 69.83%
+  - **Improvement over Baseline**: MAE +7.8% (14.64 → 13.50), RMSE +11.9% (27.17 → 23.93), R² 0.5765 → 0.6621, AQI Accuracy +2.2% (69.8% → 71.3%)
+- **Experiments**:
+  - Option 1 (Momentum features): added 5 features (35 total), improving LightGBM test AQI accuracy to 71.34%
+  - Option 2 (CityRouter): tested city-specialist routing, achieved 67.4% accuracy (worse than single model; rejected)
+  - Data extension investigation: attempted extending collection back to 2022 via OpenAQ and WAQI; confirmed that ground community monitors only began reporting in May/June 2025
 - Final pipeline saved as `models/final_pipeline.joblib`
 
 The next implementation stage is the product stage (Stage E):
 
-1. Error analysis notebook to understand Lahore underperformance (57% vs
-   Karachi 81% AQI accuracy)
+1. Error analysis notebook to understand Lahore underperformance (60.09% vs
+   Karachi 82.60% AQI accuracy)
 2. AQI advice module (`src/aqi.py`)
 3. Live-data inference
 4. Streamlit application

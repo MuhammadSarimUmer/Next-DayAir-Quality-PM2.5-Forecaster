@@ -93,7 +93,7 @@ def build_city_features(g: pd.DataFrame) -> pd.DataFrame:
     t = g["datetime_pkt"]
     out["hour"] = t.dt.hour
     out["month"] = t.dt.month
-    out["weekday"] = t.dt.weekday
+    out["weekday"] = t.dt.day_of_week
     out["is_winter"] = t.dt.month.isin(config.WINTER_MONTHS).astype(int)
     out["hour_sin"] = np.sin(2 * np.pi * t.dt.hour / 24)
     out["hour_cos"] = np.cos(2 * np.pi * t.dt.hour / 24)

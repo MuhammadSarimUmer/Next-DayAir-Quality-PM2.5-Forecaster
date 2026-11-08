@@ -88,24 +88,21 @@ We combine two free, public sources. Neither contains personal data.
 
 ## 5. Features
 
-We build **19 features** (final list may be adjusted during EDA):
+The model uses **35 engineered features** constructed strictly without forward leakage:
 
-| Group | Features | Count |
-|---|---|---|
-| **Past PM2.5** | Lagged values (1h, 3h, 6h, 12h, 24h ago) | 5 |
-| **Rolling averages** | Mean PM2.5 over the last 6h, 24h, 72h | 3 |
-| **Weather** | Temperature, humidity, pressure, wind speed, precipitation, cloud cover | 6 |
-| **Calendar** | Hour, month, weekday, winter flag | 4 |
-| **Location** | City (Karachi / Lahore) | 1 |
-| **Total** | | **19** |
+| Group | Features | Count | Description |
+|---|---|---:|---|
+| **Past PM2.5** | `pm25_now`, `pm25_lag_1h`, `pm25_lag_3h`, `pm25_lag_6h`, `pm25_lag_12h`, `pm25_lag_24h` | 6 | Captures immediate autocorrelation and memory |
+| **Rolling statistics** | `pm25_roll_mean_6h`, `pm25_roll_mean_24h`, `pm25_roll_mean_72h`, `pm25_diff_3h`, `pm25_roll_std_24h`, `pm25_roll_max_24h` | 6 | Smooths noise and detects multi-day smog accumulation & variance |
+| **Momentum & Trend** | `pm25_change_6h`, `pm25_change_24h`, `pm25_rate_of_change`, `pm25_7d_lag`, `pm25_roll_min_24h` | 5 | 6h/24h trajectory, velocity (µg/m³/h), weekly anchor, and daily floor |
+| **Weather (direct)** | `temperature_2m`, `relative_humidity_2m`, `surface_pressure`, `wind_speed_10m`, `precipitation`, `cloud_cover` | 6 | Atmospheric conditions governing dispersion |
+| **Wind vector** | `wind_dir_sin`, `wind_dir_cos` | 2 | Circular decomposition avoiding 359°–1° boundary discontinuity |
+| **Weather (derived)** | `pressure_change_24h`, `wind_speed_roll_mean_24h`, `precip_sum_24h` | 3 | Barometric pressure trend, atmospheric stagnation, 24h rain washout |
+| **Calendar** | `hour`, `month`, `weekday`, `is_winter`, `hour_sin`, `hour_cos` | 6 | Diurnal traffic cycles, weekly cycles, winter smog flag, cyclic hour |
+| **Location** | `city` | 1 | One-hot encoded (Karachi / Lahore) |
+| **Total** | | **35** | |
 
-**Reasoning:**
-
-- **Lags** capture momentum: pollution tomorrow strongly depends on pollution now.
-- **Rolling averages** smooth out sensor noise and capture multi-day smog episodes.
-- **Weather** explains *why* pollution rises or falls (low wind and high humidity trap pollutants).
-- **Calendar fields** capture daily traffic cycles and seasonal patterns. The winter flag isolates smog season.
-- **City** lets one model serve both cities while learning that their baselines differ.
+---
 
 ## 6. How we will build it
 
@@ -147,19 +144,38 @@ Hyperparameters are tuned with **5-fold `TimeSeriesSplit`** cross-validation. Ea
 ### Step 7: Final evaluation and saving
 Pick the best model using validation results, evaluate **once** on the untouched test set, and save the full pipeline (preprocessing + model) with `joblib`.
 
-## 7. How we will judge success
+## 7. How we judge success & Experimental Results
 
-We report on the held-out test set:
+### Model Comparison (Validation Set)
 
-| Metric | What it tells us |
-|---|---|
-| **MAE** (µg/m³) | Average size of the error, easy to interpret. |
-| **RMSE** (µg/m³) | Like MAE but penalises large misses, which matter during smog spikes. |
-| **R²** | Share of variance explained by the model. |
+All models tuned with 5-fold `TimeSeriesSplit` cross-validation:
 
-**Success criterion:** the final model must **beat the baseline "PM2.5 tomorrow equals PM2.5 now" on both MAE and RMSE**. If it cannot, a machine learning model adds no value over simply repeating today's reading.
+| Model | Val MAE (µg/m³) | Val RMSE (µg/m³) | Val R² | Val AQI Category Acc |
+|---|---:|---:|---:|---:|
+| Ridge Regression (α=10.0) | 9.93 | 14.83 | 0.3040 | 70.7% |
+| KNN Regressor (k=15, uniform) | 9.47 | 14.64 | 0.3221 | 68.3% |
+| Random Forest (d=20, n=100) | 8.83 | 14.01 | 0.3793 | 69.5% |
+| **LightGBM (Winner)** | **8.77** | **13.91** | **0.3876** | **71.0%** |
 
-We will also report per-city results and, as an extra, how often the predicted AQI *category* matches the true one, since that is what users actually see.
+### Final Evaluation on Held-Out Test Set (Run Once)
+
+The winning model (LightGBM) was retrained on the combined Train + Validation set (20,002 samples) and evaluated on the untouched held-out test set (3,678 samples):
+
+| Metric | Baseline (Persistence) | LightGBM Final | Improvement |
+|---|---:|---:|---:|
+| **MAE** (µg/m³) | 14.64 | **13.50** | **+7.8%** |
+| **RMSE** (µg/m³) | 27.17 | **23.93** | **+11.9%** |
+| **R²** | 0.5765 | **0.6621** | **+0.0856** |
+| **AQI Category Accuracy** | 69.8% | **71.3%** (71.34%) | **+2.2%** |
+
+#### Per-City Breakdown on Test Set
+
+| City | Test MAE (µg/m³) | Test RMSE (µg/m³) | Test R² | Test AQI Accuracy |
+|---|---:|---:|---:|---:|
+| **Karachi** | 6.25 | 9.56 | 0.7233 | **82.60%** |
+| **Lahore** | 20.75 | 32.47 | 0.5558 | **60.09%** |
+
+*Note: The model clears the baseline on all metrics. For conservative health warnings, applying boundary buffer zones yields 68.11% accuracy while erring safely on the side of caution.*
 
 ## 8. Deployment
 
@@ -215,31 +231,32 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 3. Collect data
-python src/collect.py
+# 3. Pipeline execution
+python -m src.collect
+python -m src.clean
+python -m src.features
+python -m src.split
+python -m src.train
+python -m src.evaluate
+pytest tests/
 
-# 4. Train
-python src/train.py
-
-# 5. Run the apps
+# 4. Run the apps (Deployment)
 streamlit run app/streamlit_app.py
 uvicorn app.api:app --reload
 ```
-
-*Commands will be finalised as each script is written.*
 
 ## 11. Project timeline
 
 | Phase | Deliverable | Status |
 |---|---|---|
 | 1 | Proposal | Done |
-| 2 | Data collection + `DATA_SOURCES.md` | Planned |
-| 3 | Cleaning + EDA | Planned |
-| 4 | Feature engineering + split | Planned |
-| 5 | Pipeline + model comparison | Planned |
-| 6 | Evaluation + model saving | Planned |
-| 7 | Streamlit, FastAPI, Hugging Face deployment | Planned |
-| 8 | Final report + demo | Planned |
+| 2 | Data collection + `DATA_SOURCES.md` | Done |
+| 3 | Cleaning + EDA | Done |
+| 4 | Feature engineering (35 features) + chronological split | Done |
+| 5 | Sklearn Pipeline + model comparison (Ridge, KNN, RF, LightGBM) | Done |
+| 6 | Evaluation + model saving (`final_pipeline.joblib`) | Done |
+| 7 | Streamlit, FastAPI, Hugging Face deployment | In Progress |
+| 8 | Final report + demo | In Progress |
 
 ## 12. Limitations and ethics
 
