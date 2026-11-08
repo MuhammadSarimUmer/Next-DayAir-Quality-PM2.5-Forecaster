@@ -26,7 +26,9 @@ OPENAQ_BASE = "https://api.openaq.org/v3"
 OPENMETEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 
 # ---------- collection ----------
-# Use a period with better overlapping sensor coverage
+# NOTE: OpenAQ community sensors for Karachi/Lahore only have ~1 year 4 months of data.
+# Attempted to extend to 2022 but sensors were installed ~2024-2025.
+# Documented in Limitations.md.
 START_DATE = "2025-06-23"
 END_DATE = "2026-10-31"
 
