@@ -27,6 +27,12 @@ the evaluation unrealistically optimistic.
 - 24-hour shifted prediction target
 - Chronological train/validation/test split
 - Leakage checks and core pipeline tests
+- Preprocessing/model pipeline (StandardScaler + OneHotEncoder)
+- Baseline metrics (persistence model)
+- Ridge and KNN tuning
+- Random Forest and LightGBM tuning
+- Model selection and final test evaluation
+- AQI category accuracy metric added to evaluation
 
 ### Partially completed
 
@@ -39,13 +45,8 @@ the evaluation unrealistically optimistic.
 
 ### Not yet completed
 
-The modelling and product stages have not yet been implemented:
+The product stages have not yet been implemented:
 
-- Preprocessing/model pipeline
-- Baseline metrics
-- Ridge and KNN tuning
-- Random Forest and LightGBM tuning
-- Model selection and final test evaluation
 - Error analysis
 - AQI advice module
 - Live-data inference
@@ -448,16 +449,22 @@ The EDA notebook can then be opened and rerun from
 
 ## Next recommended work
 
-The next implementation stage is modelling:
+The modelling stage (Stage D) is complete. Key results:
 
-1. Build the preprocessing pipeline with imputation, scaling, and categorical
-   encoding.
-2. Implement the tomorrow-equals-now baseline.
-3. Add MAE, RMSE, R2, per-city metrics, and AQI-category accuracy.
-4. Tune Ridge and KNN with time-series cross-validation.
-5. Tune Random Forest and LightGBM with time-series cross-validation.
-6. Select the winner using validation data.
-7. Evaluate the selected model once on the held-out test set.
-8. Save the final pipeline with joblib.
+- Random Forest selected as best regression model (test MAE 13.69, R² 0.66)
+- AQI category accuracy: 70.57% (vs 69.83% baseline)
+- Classification approach tested and rejected (69.49% accuracy, worse than
+  regression)
+- Buffer zone adjustment tested and rejected (made accuracy worse)
+- Final pipeline saved as `models/final_pipeline.joblib`
 
-The test set must remain untouched until model selection is complete.
+The next implementation stage is the product stage (Stage E):
+
+1. Error analysis notebook to understand Lahore underperformance (57% vs
+   Karachi 81% AQI accuracy)
+2. AQI advice module (`src/aqi.py`)
+3. Live-data inference
+4. Streamlit application
+5. FastAPI endpoint
+6. Deployment
+7. Final report, README polish, demo script, and slides

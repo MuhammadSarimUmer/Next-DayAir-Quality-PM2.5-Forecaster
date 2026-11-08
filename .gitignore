@@ -56,3 +56,7 @@ Desktop.ini
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
+
+# Project planning and decision docs (team internal)
+Model_Training.md
+improvement_ideas.md
