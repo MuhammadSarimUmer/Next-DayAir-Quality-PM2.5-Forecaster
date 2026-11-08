@@ -19,6 +19,13 @@ PM_BASE = (
     + [f"pm25_roll_mean_{w}h" for w in config.ROLL_HOURS]
 )
 PM_EXTRA = ["pm25_diff_3h", "pm25_roll_std_24h", "pm25_roll_max_24h"]
+PM_MOMENTUM = [
+    "pm25_change_6h",       # 6h trend direction: rising or falling?
+    "pm25_change_24h",      # day-over-day direction: same hour yesterday
+    "pm25_rate_of_change",  # 3h velocity in µg/m³ per hour
+    "pm25_7d_lag",          # same hour last week: weekly seasonality anchor
+    "pm25_roll_min_24h",    # 24h floor: how low did it get recently (recovery signal)
+]
 WX_EXTRA = ["pressure_change_24h", "wind_speed_roll_mean_24h", "precip_sum_24h"]
 WIND_COMPONENTS = ["wind_dir_sin", "wind_dir_cos"]
 CAL_BASE = ["hour", "month", "weekday", "is_winter"]
@@ -31,7 +38,7 @@ FEATURE_COLS = (
     + PM_BASE + RAW_WEATHER + CAL_BASE + CATEGORICAL_FEATURES
 )
 if config.EXTRA_FEATURES:
-    FEATURE_COLS += PM_EXTRA + WX_EXTRA + CAL_EXTRA
+    FEATURE_COLS += PM_EXTRA + PM_MOMENTUM + WX_EXTRA + CAL_EXTRA
     if HAS_WIND_DIR:
         FEATURE_COLS += WIND_COMPONENTS
 
@@ -61,6 +68,13 @@ def build_city_features(g: pd.DataFrame) -> pd.DataFrame:
     out["pm25_diff_3h"] = pm - pm.shift(3)              # short-term trend
     out["pm25_roll_std_24h"] = _roll(pm, 24).std()      # volatility
     out["pm25_roll_max_24h"] = _roll(pm, 24).max()      # recent peak
+
+    # --- PM2.5 momentum (Option 1 improvement: direction + velocity) ---
+    out["pm25_change_6h"] = pm - pm.shift(6)                    # 6h trend direction
+    out["pm25_change_24h"] = pm - pm.shift(24)                  # day-over-day direction
+    out["pm25_rate_of_change"] = (pm - pm.shift(3)) / 3.0      # µg/m³ per hour velocity
+    out["pm25_7d_lag"] = pm.shift(168)                          # same hour last week
+    out["pm25_roll_min_24h"] = _roll(pm, 24).min()              # recent floor / recovery signal
 
     # --- weather (raw, at time t) ---
     for c in RAW_WEATHER:
@@ -95,7 +109,7 @@ def build_features(clean: pd.DataFrame) -> pd.DataFrame:
 
     # PM2.5-derived columns and the target must exist. Weather NaNs are left for the
     # pipeline's imputer (fitted on train only).
-    must_exist = ["pm25_now"] + PM_BASE + PM_EXTRA + [TARGET]
+    must_exist = ["pm25_now"] + PM_BASE + PM_EXTRA + PM_MOMENTUM + [TARGET]
     n0 = len(feats)
     feats = feats.dropna(subset=must_exist)
     print(f"Dropped {n0 - len(feats)} of {n0} rows with missing PM2.5 inputs/target")
