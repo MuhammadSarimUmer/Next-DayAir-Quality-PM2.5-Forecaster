@@ -10,6 +10,8 @@ def make_clean(n=400):
     d = pd.DataFrame({"city": "karachi", "datetime_pkt": t, "pm25": np.arange(n, dtype=float)})
     for c in config.WEATHER_VARS:
         d[c] = 1.0
+    for c in config.CAMS_COLS:
+        d[c] = 50.0
     return d
 
 

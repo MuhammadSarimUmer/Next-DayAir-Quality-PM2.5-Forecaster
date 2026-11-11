@@ -6,12 +6,13 @@ This module builds sklearn transformers that:
 - Encode categorical features (OneHotEncoder for city)
 
 The preprocessor is fitted on training data only, then applied to val/test.
-No imputer is needed - all missing values were handled in features.py.
+Numeric features use median imputation (CAMS/weather gaps at series boundaries).
 """
 
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 
 
 def build_preprocessor(numeric_cols, categorical_cols=['city']):
@@ -40,7 +41,14 @@ def build_preprocessor(numeric_cols, categorical_cols=['city']):
     """
     preprocessor = ColumnTransformer(
         transformers=[
-            ('num', StandardScaler(), numeric_cols),
+            (
+                "num",
+                Pipeline([
+                    ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
+                    ("scaler", StandardScaler()),
+                ]),
+                numeric_cols,
+            ),
             ('cat', OneHotEncoder(drop='first', sparse_output=False), categorical_cols)
         ],
         remainder='drop'  # Drop any columns not specified

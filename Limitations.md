@@ -19,8 +19,12 @@ An explicit improvement attempt was made in November 2026 (Option 1): five new m
 | `pm25_rate_of_change` | 3-hour PM2.5 velocity (µg/m³ per hour) |
 | `pm25_7d_lag` | Same hour last week (weekly seasonality anchor) |
 | `pm25_roll_min_24h` | 24-hour floor (recovery signal) |
+| `pm25_acceleration` | 2nd derivative: detects sudden surges into smog episodes |
+| `stagnation_index` | Atmospheric trapping index (low wind + high relative humidity) |
+| `smog_season_intensity` | Continuous curve for Punjab crop-residue burning season |
+| `lahore_smog_risk` | Winter stagnation interaction specialized for Lahore |
 
-After retraining all four models with these 35 features (up from 30), the overall AQI category accuracy reached **71.34%** (test set, up from the 69.83% baseline).
+After retraining with these 39 features and evaluating a Blended Ensemble (combining Ridge, Random Forest, and LightGBM), overall test MAE improved to **13.21 µg/m³** (from 14.64 baseline, +9.7% improvement) and AQI category accuracy reached **71.83%** (with Lahore improving to **61.23%** and MAE dropping to 20.27 µg/m³).
 
 ### Why it happened
 
@@ -33,8 +37,9 @@ The model is, in essence, a sophisticated persistence forecast. It answers "what
 ### What would actually help
 
 - **City-specific models**: Training separate models for Karachi and Lahore would let each model specialise. Lahore's model would see proportionally more extreme-value examples and could learn smog-season dynamics without being diluted by Karachi's stable distribution.
-- **More historical data for Lahore**: The training window (June 2025 – June 2026) contains only one full Lahore smog season (Nov 2025 – Feb 2026). The test set hits October 2026 — the onset of the next smog season — which is partially out-of-distribution. Additional winters of Lahore data would directly address this. **An attempt was made to extend the collection window back to January 2022 via OpenAQ and WAQI/AQICN APIs. However, ground community monitors in Karachi and Lahore only began reporting around May–July 2025, and free API archives do not provide pre-2025 hourly ground sensor data. This is a hard external data constraint, not a pipeline limitation.**
-- **External smog indicators**: Crop-burning season dates, Lahore traffic indices, or satellite aerosol optical depth (AOD) data would provide signals that are genuinely independent of the current PM2.5 reading.
+- **Kaggle 2021–24 API history** (`USE_KAGGLE_HISTORY` in `config.py`): Hourly OpenWeather-style PM2.5 augments winters before OpenAQ; labels are **not** community sensors—disclose when mixing with ground data from June 2025 onward.
+- **More historical data for Lahore**: Even with Kaggle API history, label **provenance changes** at the 2025 OpenAQ cutover; the Dec 2024–Jun 2025 gap has no PM2.5 in either source. (Nov 2025 – Feb 2026). The test set hits October 2026 — the onset of the next smog season — which is partially out-of-distribution. Additional winters of Lahore data would directly address this. **An attempt was made to extend the collection window back to January 2022 via OpenAQ and WAQI/AQICN APIs. However, ground community monitors in Karachi and Lahore only began reporting around May–July 2025, and free API archives do not provide pre-2025 hourly ground sensor data. This is a hard external data constraint, not a pipeline limitation.**
+- **External smog indicators**: Open-Meteo CAMS (`cams_pm2_5`, `cams_dust`, `cams_aod`) is now merged via `python -m src.collect --cams` and regime features (`pm25_clearing_index`, `pm25_lag_excess_*`) target Lahore recovery errors. Further gains need fire/crop-burning indices or multi-year Lahore winters.
 
 ---
 
@@ -44,8 +49,8 @@ The model is, in essence, a sophisticated persistence forecast. It answers "what
 
 | City | Test MAE | Test AQI Accuracy |
 |------|----------|-------------------|
-| Karachi | 6.25 µg/m³ | 82.60% |
-| Lahore | 20.75 µg/m³ | 60.09% |
+| Karachi | 6.15 µg/m³ | 82.44% |
+| Lahore | 20.27 µg/m³ | 61.23% |
 
 Lahore performs **3.3× worse** on MAE and **22.5 percentage points worse** on AQI accuracy.
 

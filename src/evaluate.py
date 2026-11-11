@@ -84,7 +84,8 @@ def load_trained_models():
         'Ridge': 'ridge_tuned.joblib',
         'KNN': 'knn_tuned.joblib',
         'Random Forest': 'random_forest_tuned.joblib',
-        'LightGBM': 'lightgbm_tuned.joblib'
+        'LightGBM': 'lightgbm_tuned.joblib',
+        'Ensemble': 'ensemble_tuned.joblib'
     }
     
     for name, filename in model_files.items():
@@ -128,8 +129,11 @@ def print_comparison_table(results):
 
 
 def select_winner(results):
-    """Select best model by validation MAE."""
+    """Select best model by validation MAE; prefer Ensemble when within 0.2 µg/m³."""
     winner_name = min(results.items(), key=lambda x: x[1]['metrics']['mae'])[0]
+    best_mae = results[winner_name]["metrics"]["mae"]
+    if "Ensemble" in results and results["Ensemble"]["metrics"]["mae"] <= best_mae + 0.2:
+        winner_name = "Ensemble"
     winner_data = results[winner_name]
     
     print(f"\nSelected model: {winner_name}")
@@ -174,15 +178,12 @@ def evaluate_on_test(model, model_name):
     
     print(f"\nTest samples: {len(X_test)}")
     
-    # Predict (raw)
-    y_pred_raw = model.predict(X_test)
+    y_pred = model.predict(X_test)
     
-    # Standard evaluation
-    metrics = calculate_metrics(y_test, y_pred_raw)
+    metrics = calculate_metrics(y_test, y_pred)
     print_metrics(metrics, model_name)
     
-    # Per-city metrics
-    test['predictions'] = y_pred_raw
+    test['predictions'] = y_pred
     city_metrics = calculate_per_city_metrics(test, TARGET, 'predictions')
     print_per_city_metrics(city_metrics)
     
@@ -191,7 +192,7 @@ def evaluate_on_test(model, model_name):
     print("With Buffer Zones (Conservative Boundaries)")
     print("-" * 70)
     
-    y_pred_buffered = apply_buffer_zones(y_pred_raw)
+    y_pred_buffered = apply_buffer_zones(y_pred)
     metrics_buffered = calculate_metrics(y_test, y_pred_buffered)
     
     # Show improvement

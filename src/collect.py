@@ -1,9 +1,10 @@
 """Download raw PM2.5 (OpenAQ) and weather (Open-Meteo) data. Raw files are saved unchanged.
 
 Run:
-    python -m src.collect              # both
+    python -m src.collect              # openaq + weather + CAMS air quality
     python -m src.collect --weather    # weather only
     python -m src.collect --openaq     # pm2.5 only
+    python -m src.collect --cams       # CAMS air quality only
 
 All timestamps are stored in UTC here. Conversion to Pakistan Standard Time happens in cleaning.
 """
@@ -67,18 +68,45 @@ def collect_weather():
             params={
                 "latitude": c["lat"],
                 "longitude": c["lon"],
-                "start_date": config.START_DATE,
+                "start_date": config.WEATHER_START_DATE,
                 "end_date": config.END_DATE,
                 "hourly": ",".join(config.WEATHER_VARS),
-                "timezone": "GMT",  # keep UTC so it matches OpenAQ raw
+                "timezone": config.PKT_TZ,
+            },
+            timeout=300,
+        )
+        resp.raise_for_status()
+        hourly = resp.json()["hourly"]
+        df = pd.DataFrame(hourly).rename(columns={"time": "datetime_pkt_local"})
+        df.insert(0, "city", city)
+        out = config.RAW_DIR / f"weather_{city}.csv"
+        df.to_csv(out, index=False)
+        print(f"  saved {len(df)} rows -> {out.name}")
+
+
+def collect_cams():
+    """Regional PM2.5, dust, and AOD from Open-Meteo CAMS (not derived from local sensors)."""
+    rename = {"pm2_5": "cams_pm2_5", "dust": "cams_dust", "aerosol_optical_depth": "cams_aod"}
+    for city, c in config.CITIES.items():
+        print(f"[{city}] downloading CAMS air quality ...")
+        resp = requests.get(
+            config.OPENMETEO_AIR_QUALITY,
+            params={
+                "latitude": c["lat"],
+                "longitude": c["lon"],
+                "start_date": config.CAMS_START_DATE,
+                "end_date": config.END_DATE,
+                "hourly": ",".join(config.CAMS_API_VARS),
+                "timezone": config.PKT_TZ,
             },
             timeout=120,
         )
         resp.raise_for_status()
         hourly = resp.json()["hourly"]
-        df = pd.DataFrame(hourly).rename(columns={"time": "datetime_utc"})
+        df = pd.DataFrame(hourly).rename(columns={"time": "datetime_pkt_local"})
+        df = df.rename(columns=rename)
         df.insert(0, "city", city)
-        out = config.RAW_DIR / f"weather_{city}.csv"
+        out = config.RAW_DIR / f"airquality_{city}.csv"
         df.to_csv(out, index=False)
         print(f"  saved {len(df)} rows -> {out.name}")
 
@@ -87,10 +115,13 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--openaq", action="store_true")
     ap.add_argument("--weather", action="store_true")
+    ap.add_argument("--cams", action="store_true")
     args = ap.parse_args()
 
-    run_all = not (args.openaq or args.weather)
+    run_all = not (args.openaq or args.weather or args.cams)
     if run_all or args.weather:
         collect_weather()
+    if run_all or args.cams:
+        collect_cams()
     if run_all or args.openaq:
         collect_openaq()

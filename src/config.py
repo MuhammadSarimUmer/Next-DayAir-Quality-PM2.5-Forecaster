@@ -24,6 +24,11 @@ SPLIT_INFO_FILE = PROCESSED_DIR / "split_info.json"
 OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY")
 OPENAQ_BASE = "https://api.openaq.org/v3"
 OPENMETEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
+OPENMETEO_AIR_QUALITY = "https://air-quality-api.open-meteo.com/v1/air-quality"
+
+# Open-Meteo CAMS reanalysis (independent of ground sensors; regional smoke/aerosol signal)
+CAMS_API_VARS = ["pm2_5", "dust", "aerosol_optical_depth"]
+CAMS_COLS = ["cams_pm2_5", "cams_dust", "cams_aod"]
 
 # ---------- collection ----------
 # NOTE: OpenAQ community sensors for Karachi/Lahore only have ~1 year 4 months of data.
@@ -31,6 +36,12 @@ OPENMETEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 # Documented in Limitations.md.
 START_DATE = "2025-06-23"
 END_DATE = "2026-10-31"
+
+# Kaggle 2021-24 hourly API history (datasets/2021-24); OpenAQ wins on overlap.
+USE_KAGGLE_HISTORY = False
+KAGGLE_HISTORY_END = "2024-12-12"
+WEATHER_START_DATE = "2021-08-24" if USE_KAGGLE_HISTORY else START_DATE
+CAMS_START_DATE = WEATHER_START_DATE
 
 CITIES = {
     "karachi": {"lat": 24.8607, "lon": 67.0011},
@@ -92,7 +103,7 @@ WEATHER_VARS = [
 PKT_TZ = "Asia/Karachi"
 
 PM25_MIN = 0.0
-PM25_MAX = 1000.0
+PM25_MAX = 2000.0  # allow extreme smog hours in Kaggle API series
 
 STUCK_HOURS = 8
 MIN_COVERAGE_PCT = 50
@@ -111,3 +122,5 @@ EXTRA_FEATURES = True
 
 TRAIN_FRAC = 0.70
 VAL_FRAC = 0.15
+# Fewer CV folds when train set is large (Kaggle history ~50k rows).
+CV_SPLITS = 3 if USE_KAGGLE_HISTORY else 5

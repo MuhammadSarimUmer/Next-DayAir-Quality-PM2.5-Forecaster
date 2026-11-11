@@ -17,7 +17,7 @@ from pathlib import Path
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 from sklearn.linear_model import Ridge
 from sklearn.neighbors import KNeighborsRegressor
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, VotingRegressor
 from lightgbm import LGBMRegressor
 
 from src import config
@@ -78,7 +78,7 @@ def train_ridge(X_train, y_train, X_val, y_val):
     }
     
     # TimeSeriesSplit for cross-validation
-    tscv = TimeSeriesSplit(n_splits=5)
+    tscv = TimeSeriesSplit(n_splits=config.CV_SPLITS)
     
     # Grid search
     print("Tuning hyperparameters with TimeSeriesSplit (5 folds)...")
@@ -134,7 +134,7 @@ def train_knn(X_train, y_train, X_val, y_val):
     }
     
     # TimeSeriesSplit for cross-validation
-    tscv = TimeSeriesSplit(n_splits=5)
+    tscv = TimeSeriesSplit(n_splits=config.CV_SPLITS)
     
     # Grid search
     print("Tuning hyperparameters with TimeSeriesSplit (5 folds)...")
@@ -188,17 +188,17 @@ def train_random_forest(X_train, y_train, X_val, y_val):
     
     # Quick hyperparameter grid
     param_grid = {
-        'model__n_estimators': [100, 200],
-        'model__max_depth': [10, 20, None],
-        'model__min_samples_split': [2, 5]
+        'model__n_estimators': [120],
+        'model__max_depth': [12, 20],
+        'model__min_samples_split': [5]
     }
     
     # TimeSeriesSplit for cross-validation
-    tscv = TimeSeriesSplit(n_splits=5)
+    tscv = TimeSeriesSplit(n_splits=config.CV_SPLITS)
     
     # Grid search
     print("Tuning hyperparameters with TimeSeriesSplit (5 folds)...")
-    print("(This may take 10-15 minutes...)")
+    print("(Optimized grid for robust training...)")
     grid_search = GridSearchCV(
         pipeline,
         param_grid,
@@ -249,14 +249,13 @@ def train_lightgbm(X_train, y_train, X_val, y_val):
     
     # Quick hyperparameter grid
     param_grid = {
-        'model__n_estimators': [100, 200],
-        'model__learning_rate': [0.01, 0.05, 0.1],
-        'model__num_leaves': [31, 50],
-        'model__max_depth': [10, 20, -1]
+        'model__n_estimators': [150, 300],
+        'model__learning_rate': [0.03, 0.08],
+        'model__num_leaves': [31, 45]
     }
     
     # TimeSeriesSplit for cross-validation
-    tscv = TimeSeriesSplit(n_splits=5)
+    tscv = TimeSeriesSplit(n_splits=config.CV_SPLITS)
     
     # Grid search
     print("Tuning hyperparameters with TimeSeriesSplit (5 folds)...")
@@ -286,6 +285,39 @@ def train_lightgbm(X_train, y_train, X_val, y_val):
     print(f"\n✓ Saved to: {model_path}")
     
     return grid_search.best_estimator_, val_metrics
+
+
+def train_ensemble(ridge_model, rf_model, lgbm_model, X_train, y_train, X_val, y_val):
+    """
+    Train VotingRegressor ensemble combining Ridge, Random Forest, and LightGBM.
+    """
+    print("\n" + "=" * 70)
+    print("Training Blended Ensemble (Ridge + RF + LightGBM)")
+    print("=" * 70)
+    
+    ensemble = VotingRegressor(
+        estimators=[
+            ('ridge', ridge_model),
+            ('rf', rf_model),
+            ('lgbm', lgbm_model)
+        ],
+        weights=[0.2, 0.3, 0.5]
+    )
+    
+    print("Fitting ensemble on training data...")
+    ensemble.fit(X_train, y_train)
+    
+    # Evaluate on validation
+    y_val_pred = ensemble.predict(X_val)
+    val_metrics = calculate_metrics(y_val, y_val_pred)
+    print_metrics(val_metrics, "Ensemble (Validation)")
+    
+    # Save model
+    model_path = MODELS_DIR / 'ensemble_tuned.joblib'
+    joblib.dump(ensemble, model_path)
+    print(f"\n✓ Saved to: {model_path}")
+    
+    return ensemble, val_metrics
 
 
 def print_summary(all_metrics):
@@ -333,17 +365,20 @@ if __name__ == '__main__':
     all_metrics = {}
     
     # Train each model
-    _, ridge_metrics = train_ridge(X_train, y_train, X_val, y_val)
+    best_ridge, ridge_metrics = train_ridge(X_train, y_train, X_val, y_val)
     all_metrics['Ridge'] = ridge_metrics
     
     _, knn_metrics = train_knn(X_train, y_train, X_val, y_val)
     all_metrics['KNN'] = knn_metrics
     
-    _, rf_metrics = train_random_forest(X_train, y_train, X_val, y_val)
+    best_rf, rf_metrics = train_random_forest(X_train, y_train, X_val, y_val)
     all_metrics['Random Forest'] = rf_metrics
     
-    _, lgbm_metrics = train_lightgbm(X_train, y_train, X_val, y_val)
+    best_lgbm, lgbm_metrics = train_lightgbm(X_train, y_train, X_val, y_val)
     all_metrics['LightGBM'] = lgbm_metrics
+    
+    _, ensemble_metrics = train_ensemble(best_ridge, best_rf, best_lgbm, X_train, y_train, X_val, y_val)
+    all_metrics['Ensemble'] = ensemble_metrics
     
     # Print summary
     print_summary(all_metrics)

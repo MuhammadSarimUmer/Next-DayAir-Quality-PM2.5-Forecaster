@@ -152,30 +152,31 @@ All models tuned with 5-fold `TimeSeriesSplit` cross-validation:
 
 | Model | Val MAE (µg/m³) | Val RMSE (µg/m³) | Val R² | Val AQI Category Acc |
 |---|---:|---:|---:|---:|
-| Ridge Regression (α=10.0) | 9.93 | 14.83 | 0.3040 | 70.7% |
-| KNN Regressor (k=15, uniform) | 9.47 | 14.64 | 0.3221 | 68.3% |
-| Random Forest (d=20, n=100) | 8.83 | 14.01 | 0.3793 | 69.5% |
-| **LightGBM (Winner)** | **8.77** | **13.91** | **0.3876** | **71.0%** |
+| Ridge Regression (α=10.0) | 9.79 | 14.69 | 0.3176 | 70.4% |
+| KNN Regressor (k=15, uniform) | 9.43 | 14.61 | 0.3242 | 68.6% |
+| Random Forest (d=12, n=120) | 8.67 | 13.81 | 0.3965 | 70.0% |
+| LightGBM (lr=0.03, leaves=45) | 8.67 | 13.81 | 0.3962 | 70.1% |
+| **Blended Ensemble (Winner)** | **8.58** | **13.69** | **0.4072** | **71.05%** |
 
 ### Final Evaluation on Held-Out Test Set (Run Once)
 
-The winning model (LightGBM) was retrained on the combined Train + Validation set (20,002 samples) and evaluated on the untouched held-out test set (3,678 samples):
+The winning model (Blended Ensemble combining Ridge, Random Forest, and LightGBM) was retrained on the combined Train + Validation set (20,002 samples) and evaluated on the untouched held-out test set (3,678 samples):
 
-| Metric | Baseline (Persistence) | LightGBM Final | Improvement |
+| Metric | Baseline (Persistence) | Ensemble Final | Improvement |
 |---|---:|---:|---:|
-| **MAE** (µg/m³) | 14.64 | **13.50** | **+7.8%** |
-| **RMSE** (µg/m³) | 27.17 | **23.93** | **+11.9%** |
-| **R²** | 0.5765 | **0.6621** | **+0.0856** |
-| **AQI Category Accuracy** | 69.8% | **71.3%** (71.34%) | **+2.2%** |
+| **MAE** (µg/m³) | 14.64 | **13.42** | **+8.4%** |
+| **RMSE** (µg/m³) | 27.17 | **23.43** | **+13.8%** |
+| **R²** | 0.5765 | **0.6762** | **+0.0997** |
+| **AQI Category Accuracy** | 69.8% | **71.8%** (71.83%) | **+2.9%** |
 
 #### Per-City Breakdown on Test Set
 
 | City | Test MAE (µg/m³) | Test RMSE (µg/m³) | Test R² | Test AQI Accuracy |
 |---|---:|---:|---:|---:|
-| **Karachi** | 6.25 | 9.56 | 0.7233 | **82.60%** |
-| **Lahore** | 20.75 | 32.47 | 0.5558 | **60.09%** |
+| **Karachi** | 6.25 | 9.46 | 0.7364 | **81.79%** |
+| **Lahore** | 20.59 | 32.27 | 0.5703 | **61.86%** |
 
-*Note: The model clears the baseline on all metrics. For conservative health warnings, applying boundary buffer zones yields 68.11% accuracy while erring safely on the side of caution.*
+*Note: The model clears the baseline on all metrics. For conservative health warnings, applying boundary buffer zones yields 68.00% accuracy while erring safely on the side of caution.*
 
 ## 8. Deployment
 

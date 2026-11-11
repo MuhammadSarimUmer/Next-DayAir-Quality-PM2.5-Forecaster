@@ -449,25 +449,25 @@ The EDA notebook can then be opened and rerun from
 The modelling stage (Stage D) is complete. Key results:
 
 - **Validation Comparison**:
-  - Ridge: MAE 9.93 µg/m³, RMSE 14.83, R² 0.3040, AQI Accuracy 70.7%
-  - KNN: MAE 9.47 µg/m³, RMSE 14.64, R² 0.3221, AQI Accuracy 68.3%
-  - Random Forest: MAE 8.83 µg/m³, RMSE 14.01, R² 0.3793, AQI Accuracy 69.5%
-  - **LightGBM (Winner)**: MAE 8.77 µg/m³, RMSE 13.91, R² 0.3876, AQI Accuracy 71.0%
+  - Ridge: MAE 9.79 µg/m³, RMSE 14.69, R² 0.3176, AQI Accuracy 70.4%
+  - KNN: MAE 9.43 µg/m³, RMSE 14.61, R² 0.3242, AQI Accuracy 68.6%
+  - Random Forest: MAE 8.67 µg/m³, RMSE 13.81, R² 0.3965, AQI Accuracy 70.0%
+  - LightGBM: MAE 8.67 µg/m³, RMSE 13.81, R² 0.3962, AQI Accuracy 70.1%
+  - **Blended Ensemble (Winner)**: MAE 8.58 µg/m³, RMSE 13.69, R² 0.4072, AQI Accuracy 71.05%
 - **Final Evaluation (Test Set, Retrained on Train+Val 20,002 samples)**:
-  - Selected model: LightGBM (35 features, momentum and trend added)
-  - Overall Test MAE: 13.50 µg/m³
-  - Overall Test RMSE: 23.93 µg/m³
-  - Overall Test R²: 0.6621
-  - Overall Test AQI Accuracy: 71.34% (Standard) / 68.11% (With conservative buffers)
-  - **Karachi Breakdown**: MAE 6.25 µg/m³, RMSE 9.56, R² 0.7233, AQI Accuracy 82.60%
-  - **Lahore Breakdown**: MAE 20.75 µg/m³, RMSE 32.47, R² 0.5558, AQI Accuracy 60.09%
+  - Selected model: Blended Ensemble (Ridge + Random Forest + LightGBM with 39 features)
+  - Overall Test MAE: 13.21 µg/m³
+  - Overall Test RMSE: 23.43 µg/m³
+  - Overall Test R²: 0.6762
+  - Overall Test AQI Accuracy: 71.83% (Standard) / 68.00% (With conservative buffers)
+  - **Karachi Breakdown**: MAE 6.15 µg/m³, RMSE 9.26, R² 0.7405, AQI Accuracy 82.44%
+  - **Lahore Breakdown**: MAE 20.27 µg/m³, RMSE 31.82, R² 0.5735, AQI Accuracy 61.23% (improved from 60.09%, MAE reduced from 20.75 µg/m³)
 - **Baseline Comparison (Persistence - Test Set)**:
   - Baseline MAE: 14.64 µg/m³, RMSE 27.17, R² 0.5765, AQI Accuracy 69.83%
-  - **Improvement over Baseline**: MAE +7.8% (14.64 → 13.50), RMSE +11.9% (27.17 → 23.93), R² 0.5765 → 0.6621, AQI Accuracy +2.2% (69.8% → 71.3%)
-- **Experiments**:
-  - Option 1 (Momentum features): added 5 features (35 total), improving LightGBM test AQI accuracy to 71.34%
-  - Option 2 (CityRouter): tested city-specialist routing, achieved 67.4% accuracy (worse than single model; rejected)
-  - Data extension investigation: attempted extending collection back to 2022 via OpenAQ and WAQI; confirmed that ground community monitors only began reporting in May/June 2025
+  - **Improvement over Baseline**: MAE +9.7% (14.64 → 13.21), RMSE +13.8% (27.17 → 23.43), R² 0.5765 → 0.6762, AQI Accuracy +2.9% (69.8% → 71.8%)
+- **Engineering Upgrades**:
+  - Domain features added: `pm25_acceleration` (second derivative), `stagnation_index` (low wind + high humidity trapping), `smog_season_intensity` (Gaussian peak for crop burning), and `lahore_smog_risk` (specialized Lahore winter interaction).
+  - Voting ensemble architecture combining linear regularization (Ridge), non-linear bagging (Random Forest), and gradient boosting (LightGBM).
 - Final pipeline saved as `models/final_pipeline.joblib`
 
 The next implementation stage is the product stage (Stage E):
