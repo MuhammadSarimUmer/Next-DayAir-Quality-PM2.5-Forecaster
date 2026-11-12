@@ -105,7 +105,7 @@ def train_ridge(X_train, y_train, X_val, y_val):
     # Save model
     model_path = MODELS_DIR / 'ridge_tuned.joblib'
     joblib.dump(grid_search.best_estimator_, model_path)
-    print(f"\n✓ Saved to: {model_path}")
+    print(f"\nOK Saved to: {model_path}")
     
     return grid_search.best_estimator_, val_metrics
 
@@ -161,7 +161,7 @@ def train_knn(X_train, y_train, X_val, y_val):
     # Save model
     model_path = MODELS_DIR / 'knn_tuned.joblib'
     joblib.dump(grid_search.best_estimator_, model_path)
-    print(f"\n✓ Saved to: {model_path}")
+    print(f"\nOK Saved to: {model_path}")
     
     return grid_search.best_estimator_, val_metrics
 
@@ -222,7 +222,7 @@ def train_random_forest(X_train, y_train, X_val, y_val):
     # Save model
     model_path = MODELS_DIR / 'random_forest_tuned.joblib'
     joblib.dump(grid_search.best_estimator_, model_path)
-    print(f"\n✓ Saved to: {model_path}")
+    print(f"\nOK Saved to: {model_path}")
     
     return grid_search.best_estimator_, val_metrics
 
@@ -282,7 +282,7 @@ def train_lightgbm(X_train, y_train, X_val, y_val):
     # Save model
     model_path = MODELS_DIR / 'lightgbm_tuned.joblib'
     joblib.dump(grid_search.best_estimator_, model_path)
-    print(f"\n✓ Saved to: {model_path}")
+    print(f"\nOK Saved to: {model_path}")
     
     return grid_search.best_estimator_, val_metrics
 
@@ -315,7 +315,7 @@ def train_ensemble(ridge_model, rf_model, lgbm_model, X_train, y_train, X_val, y
     # Save model
     model_path = MODELS_DIR / 'ensemble_tuned.joblib'
     joblib.dump(ensemble, model_path)
-    print(f"\n✓ Saved to: {model_path}")
+    print(f"\nOK Saved to: {model_path}")
     
     return ensemble, val_metrics
 
@@ -341,7 +341,7 @@ def print_summary(all_metrics):
     
     # Find best model
     best_model = min(all_metrics.items(), key=lambda x: x[1]['mae'])
-    print(f"\n✓ Best model by MAE: {best_model[0]}")
+    print(f"\nOK Best model by MAE: {best_model[0]}")
     print(f"  Validation MAE: {best_model[1]['mae']:.2f} µg/m³")
 
 

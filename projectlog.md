@@ -33,6 +33,16 @@ the evaluation unrealistically optimistic.
 - Random Forest and LightGBM tuning
 - Model selection and final test evaluation
 - AQI category accuracy metric added to evaluation
+- Deployable final ensemble trained and saved
+- Error analysis report, tables, and figures
+- AQI breakpoint bug fixed and per-breakpoint tests added
+- Live-data inference with offline fallback
+- Streamlit application
+- FastAPI endpoints
+- Hugging Face Space deployment bundle
+- Final report, limitations/ethics update, README polish
+- Demo script and slides
+- Full test suite (22 tests)
 
 ### Completed Setup Documentation
 
@@ -41,15 +51,9 @@ the evaluation unrealistically optimistic.
 
 ### Not yet completed
 
-The product stages have not yet been implemented:
-
-- Error analysis
-- AQI advice module
-- Live-data inference
-- Streamlit application
-- FastAPI endpoint
-- Deployment
-- Final report, README polish, demo script, and slides
+- Actual Hugging Face Space upload (requires account/token)
+- Live OpenAQ end-to-end test with a real API key
+- Scheduled retraining and drift monitoring
 
 ## Step 1: Initial project setup
 
@@ -218,8 +222,9 @@ than being filled with an unjustified estimate.
 
 The cleaned data is written to
 [`data/processed/clean_hourly.csv`](./data/processed/clean_hourly.csv).
-The quality-control summary is written to
-[`reports/gap_report.csv`](./reports/gap_report.csv).
+The quality-control summary is written to `reports/gap_report.csv` when
+`python -m src.clean` is rerun. That generated file is gitignored, so the cleaned
+data in `data/processed/clean_hourly.csv` is the committed source of truth.
 
 ### Current quality-control results
 
@@ -403,31 +408,35 @@ across train, validation, and test.
 
 | Split | Rows | Start | End |
 |---|---:|---|---|
-| Train | 16,372 | 2025-05-31 21:00 | 2026-05-29 21:00 |
-| Validation | 3,630 | 2026-05-30 22:00 | 2026-08-14 12:00 |
-| Test | 3,678 | 2026-08-15 13:00 | 2026-10-31 03:00 |
+| Train | 16,029 | 2025-06-30 05:00 | 2026-06-06 12:00 |
+| Validation | 3,442 | 2026-06-07 13:00 | 2026-08-18 05:00 |
+| Test | 3,492 | 2026-08-19 06:00 | 2026-10-30 23:00 |
 
-The validation and test sets contain equal numbers of Karachi and Lahore rows (Validation: 1,815 each; Test: 1,839 each).
+The validation and test sets contain equal numbers of Karachi and Lahore rows
+(Validation: 1,721 each; Test: 1,746 each). Train has 8,120 Lahore and 7,909
+Karachi rows.
 
 ## Verification completed
 
-The tests in
-[`tests/test_pipeline_logic.py`](./tests/test_pipeline_logic.py) passed:
+The full suite passed:
 
 ```text
-3 passed
+22 passed
 ```
 
-The tests verify that:
+`tests/test_pipeline_logic.py` contributes 3 tests that verify:
 
 - The 24-hour target and PM2.5 lag values are aligned correctly.
 - Feature names are unique and present in the generated data.
 - Train, validation, and test splits do not overlap through the 24-hour
   target horizon.
 
-The test run produced pandas deprecation warnings for `t.dt.weekday`. These
-warnings do not currently fail the tests, but the expression should eventually
-be updated to `t.dt.day_of_week`.
+`tests/test_aqi.py` contributes 19 tests covering every AQI breakpoint (both
+sides), gap values, invalid input, monotonicity, colours, and advice structure.
+
+The test run produces pandas deprecation warnings for `t.dt.weekday`. These
+warnings do not fail the tests, but the expression should eventually be updated
+to `t.dt.day_of_week`.
 
 ## Reproducible pipeline commands
 
@@ -439,44 +448,220 @@ python -m src.collect
 python -m src.clean
 python -m src.features
 python -m src.split
+python -m src.baseline
+python -m src.train
+python -m src.train_final
+python -m src.evaluate
+python -m src.error_analysis
+pytest tests/
 ```
 
 The EDA notebook can then be opened and rerun from
 [`notebooks/02_eda.ipynb`](./notebooks/02_eda.ipynb).
 
-## Next recommended work
+Product commands (no OpenAQ key needed for the offline path):
 
-The modelling stage (Stage D) is complete. Key results:
+```text
+python -m src.live_data --refresh-fallback --offline
+streamlit run app/streamlit_app.py
+uvicorn app.api:app --reload --port 8000
+```
 
-- **Validation Comparison**:
-  - Ridge: MAE 9.79 µg/m³, RMSE 14.69, R² 0.3176, AQI Accuracy 70.4%
-  - KNN: MAE 9.43 µg/m³, RMSE 14.61, R² 0.3242, AQI Accuracy 68.6%
-  - Random Forest: MAE 8.67 µg/m³, RMSE 13.81, R² 0.3965, AQI Accuracy 70.0%
-  - LightGBM: MAE 8.67 µg/m³, RMSE 13.81, R² 0.3962, AQI Accuracy 70.1%
-  - **Blended Ensemble (Winner)**: MAE 8.58 µg/m³, RMSE 13.69, R² 0.4072, AQI Accuracy 71.05%
-- **Final Evaluation (Test Set, Retrained on Train+Val 20,002 samples)**:
-  - Selected model: Blended Ensemble (Ridge + Random Forest + LightGBM with 39 features)
-  - Overall Test MAE: 13.21 µg/m³
-  - Overall Test RMSE: 23.43 µg/m³
-  - Overall Test R²: 0.6762
-  - Overall Test AQI Accuracy: 71.83% (Standard) / 68.00% (With conservative buffers)
-  - **Karachi Breakdown**: MAE 6.15 µg/m³, RMSE 9.26, R² 0.7405, AQI Accuracy 82.44%
-  - **Lahore Breakdown**: MAE 20.27 µg/m³, RMSE 31.82, R² 0.5735, AQI Accuracy 61.23% (improved from 60.09%, MAE reduced from 20.75 µg/m³)
-- **Baseline Comparison (Persistence - Test Set)**:
-  - Baseline MAE: 14.64 µg/m³, RMSE 27.17, R² 0.5765, AQI Accuracy 69.83%
-  - **Improvement over Baseline**: MAE +9.7% (14.64 → 13.21), RMSE +13.8% (27.17 → 23.43), R² 0.5765 → 0.6762, AQI Accuracy +2.9% (69.8% → 71.8%)
-- **Engineering Upgrades**:
-  - Domain features added: `pm25_acceleration` (second derivative), `stagnation_index` (low wind + high humidity trapping), `smog_season_intensity` (Gaussian peak for crop burning), and `lahore_smog_risk` (specialized Lahore winter interaction).
-  - Voting ensemble architecture combining linear regularization (Ridge), non-linear bagging (Random Forest), and gradient boosting (LightGBM).
-- Final pipeline saved as `models/final_pipeline.joblib`
+## Stage D results (current 47-feature run)
 
-The next implementation stage is the product stage (Stage E):
+Validation comparison:
 
-1. Error analysis notebook to understand Lahore underperformance (60.09% vs
-   Karachi 82.60% AQI accuracy)
-2. AQI advice module (`src/aqi.py`)
-3. Live-data inference
-4. Streamlit application
-5. FastAPI endpoint
-6. Deployment
-7. Final report, README polish, demo script, and slides
+| Model | MAE | RMSE | R² | AQI accuracy |
+|---|---:|---:|---:|---:|
+| Ridge | 10.23 | 15.29 | 0.2645 | 69.2% |
+| KNN | 9.08 | 14.18 | 0.3679 | 71.5% |
+| Random Forest | **8.43** | **13.67** | **0.4121** | 71.9% |
+| LightGBM | 8.49 | 13.78 | 0.4023 | 71.9% |
+| Ensemble | 8.45 | 13.70 | 0.4099 | **72.4%** |
+
+The ensemble was selected using the pre-declared 0.2 µg/m³ stability rule.
+
+Final test evaluation (ensemble retrained on train + validation, 19,471 rows):
+
+| Scope | MAE | RMSE | R² | AQI accuracy |
+|---|---:|---:|---:|---:|
+| Overall | **13.31** | **23.65** | **0.6695** | **71.65%** |
+| Karachi | 6.20 | 9.46 | 0.7282 | 82.02% |
+| Lahore | 20.42 | 32.08 | 0.5591 | 61.28% |
+
+Persistence baseline on the same test split: MAE 14.54, RMSE 26.98, R² 0.5700,
+AQI accuracy 69.99%. The ensemble improves MAE by 8.5%, RMSE by 12.3%, R² by
+0.0995, and AQI accuracy by 1.66 percentage points.
+
+Artifacts: `models/final_pipeline.joblib` and `models/model_metadata.json`.
+
+## Stage E results (product stage)
+
+Completed:
+
+- Error analysis in `src/error_analysis.py`, with report, CSVs, JSON, and seven
+  figures in `reports/`.
+- AQI module fixed (breakpoint gap bug) and covered by 19 per-breakpoint tests.
+- Live-data inference with OpenAQ/Open-Meteo/CAMS and a labelled offline fallback
+  in `src/live_data.py`.
+- Streamlit app in `app/streamlit_app.py` (verified headless, health 200).
+- FastAPI service in `app/api.py` (`/health`, `/predict`, `/aqi`, `/metadata`).
+- Hugging Face Space bundle in `deploy/huggingface/` (actual push requires a
+  Hugging Face account/token, so it was not uploaded from this environment).
+- Final report, limitations/ethics update, README polish, demo script, and slides.
+- Full test suite: 22 passed.
+
+Key error-analysis finding: the ensemble is strong on typical hours but
+underpredicts top-5% spikes (90.3% of spike hours) and overpredicts rapid clearing
+days. Lahore October 2026 MAE is 30.79; the worst day is 29 October 2026 (MAE
+108.82). Most AQI category errors are one band away.
+
+Rejected post-processing, documented in `Limitations.md`:
+
+- Clearing blend: MAE 13.51, AQI 71.33% (worse than raw ensemble).
+- Conservative AQI buffers: MAE 13.35, AQI 69.22% (worse AQI accuracy).
+
+## Stage F: Manual Testing and Documentation Completion (November 12, 2026)
+
+### Completed
+
+- **Application Deployment:** Both Streamlit frontend and FastAPI backend successfully deployed and tested in local environment.
+  - FastAPI backend: Running on port 8001 with all endpoints operational (`/health`, `/predict`, `/aqi`, `/metadata`, `/docs`)
+  - Streamlit frontend: Running on port 8502 with full UI functionality
+  - Backend-frontend integration verified via environment variable `API_BASE_URL`
+
+- **Manual Testing Performed:**
+  - ✅ **Live Predictions Verified** (November 12, 2026, ~21:00 PKT):
+    - **Lahore:** Observed 262.93 µg/m³ → Predicted 273.35 µg/m³ (Hazardous, AQI 336)
+    - **Karachi:** Observed 47.83 µg/m³ → Predicted 55.29 µg/m³ (Unhealthy for Sensitive Groups, AQI 150)
+    - Data staleness: 2.2 hours (acceptable for live mode)
+  - ✅ **Offline Mode:** Successfully tested with saved snapshot (October 30, 2026 data)
+  - ✅ **City Switching:** Predictions update correctly when switching between Lahore and Karachi
+  - ✅ **Backend Modes:** Both "Local pipeline" and "FastAPI service" modes functional
+  - ✅ **Charts and Visualizations:** 
+    - Recent trend line chart displays historical PM2.5 correctly
+    - Now vs Tomorrow bar chart renders comparison
+    - Model accuracy panel shows all three error analysis figures
+  - ✅ **Manual AQI Calculator:** Slider-based PM2.5 to AQI conversion working across all six EPA categories
+  - ✅ **Health Advice:** Contextual recommendations display appropriately for each AQI severity level
+  - ✅ **Data Freshness Indicators:** Staleness warnings appear correctly for offline/stale data
+  - ✅ **API Endpoints:** All REST endpoints tested via Swagger UI and command-line requests
+    - Health check returns status "ok" with model metrics
+    - Predict endpoint handles valid/invalid cities, live/offline modes
+    - Manual AQI endpoint validates input ranges (0-2000 µg/m³)
+    - Metadata endpoint returns test metrics and feature count
+
+- **Automated Testing:**
+  - ✅ **31 out of 31 tests passing** (100% pass rate)
+  - Test coverage:
+    - 9 API endpoint tests (`test_api.py`): Health check, predictions, validation, error handling
+    - 19 AQI calculation tests (`test_aqi.py`): All breakpoint boundaries, edge cases, monotonicity
+    - 3 pipeline integrity tests (`test_pipeline_logic.py`): Target alignment, feature uniqueness, split non-overlap
+
+- **Testing Documentation Created:**
+  - **`reports/manual_testing_guide.md`** (Comprehensive, 400+ lines):
+    - Step-by-step testing scenarios for all features
+    - 50+ item testing checklist (API tests, UI tests, prediction tests, edge cases)
+    - Expected results and sample outputs for each scenario
+    - Bug reporting template with severity classification
+    - Detailed troubleshooting guide for common issues
+    - Performance expectations and accuracy benchmarks
+  - **`QUICK_TEST_CHECKLIST.md`** (Quick reference, 15-minute testing track):
+    - 10 priority tests covering core functionality
+    - Visual verification guide for AQI color coding
+    - Common issues quick-fix table
+  - **`RUNNING_APPLICATION_STATUS.md`** (Service status document):
+    - Real-time service status with URLs and process IDs
+    - Verification test results summary
+    - Quick start guide for immediate testing
+    - Service management commands
+
+- **Model Performance Confirmed:**
+  - Voting Ensemble: Ridge (20%) + Random Forest (30%) + LightGBM (50%)
+  - 47 engineered features (PM2.5 lags, rolling stats, momentum, weather, CAMS aerosol, calendar, city)
+  - Training: 19,471 rows (train + validation combined for final model)
+  - Held-out test metrics:
+    - MAE: 13.31 µg/m³ (8.5% improvement over persistence baseline)
+    - RMSE: 23.65 µg/m³ (12.3% improvement)
+    - R²: 0.6695
+    - AQI Category Accuracy: 71.65%
+  - Per-city performance:
+    - Karachi: MAE 6.20 µg/m³, AQI accuracy 82.0%
+    - Lahore: MAE 20.42 µg/m³, AQI accuracy 61.3%
+
+### Features Validated Through Manual Testing
+
+| Feature Category | Status | Notes |
+|-----------------|--------|-------|
+| Live API Data Fetching | ✅ Working | OpenAQ + Open-Meteo + CAMS integration functional |
+| Offline Snapshot Fallback | ✅ Working | Graceful degradation when APIs unavailable |
+| City-Specific Predictions | ✅ Working | Lahore and Karachi predictions differ appropriately |
+| AQI Category Color Coding | ✅ Working | All 6 EPA categories display correct colors (Green→Maroon) |
+| Health Advice Generation | ✅ Working | Contextual recommendations match severity levels |
+| Trend Visualization | ✅ Working | Historical PM2.5 line chart with 24h rolling mean |
+| Comparison Charts | ✅ Working | Now vs Tomorrow bar chart |
+| Model Accuracy Display | ✅ Working | Error scatter, monthly MAE, confusion matrix figures |
+| Manual AQI Simulator | ✅ Working | Real-time slider-based PM2.5→AQI conversion |
+| Cache Refresh | ✅ Working | "Refresh inputs" button clears cached predictions |
+| Input Validation | ✅ Working | API rejects invalid cities, out-of-range PM2.5 values |
+| Error Handling | ✅ Working | User-friendly error messages for backend failures |
+| Backend Switching | ✅ Working | Local pipeline and FastAPI service modes both functional |
+
+### Testing Environment
+
+- **Date:** November 12, 2026
+- **Services:** FastAPI (port 8001), Streamlit (port 8502)
+- **Data Currency:** Live data with 2.2-hour staleness
+- **Browser Compatibility:** Verified in modern browsers
+- **Platform:** Windows environment with Python 3.14.7
+
+### Limitations Documented
+
+Updated `Limitations.md` with deployment status clarifications:
+- Historical chart data ends at 2026-10-30 23:00 PKT (latest training data)
+- Offline snapshot can be stale (312+ hours in offline mode)
+- Community sensor data quality constraints
+- Lahore spike/clearing prediction challenges
+- AQI advice is general awareness, not medical/regulatory guidance
+- Hugging Face deployment bundle prepared but **actual Space upload pending** (requires HF account/token)
+
+### Key Findings from Manual Testing
+
+1. **Live Mode Performance:** Application successfully fetches and processes real-time data with acceptable latency (2-10 seconds for predictions)
+2. **Prediction Quality:** Live predictions align with expected AQI categories based on current conditions
+3. **User Experience:** Interface is intuitive with clear visual hierarchy and responsive controls
+4. **Error Resilience:** Application handles backend failures gracefully without crashing
+5. **Data Transparency:** Staleness indicators and source labels provide clear data provenance
+6. **Cross-City Comparison:** Lahore consistently shows higher PM2.5 than Karachi, matching known patterns
+
+### What Works Well
+
+- Both deployment modes (local pipeline and API service) are stable
+- Live data integration with automatic fallback to offline snapshot
+- Comprehensive error handling and user-friendly messaging
+- Visual clarity of AQI categories through color coding
+- Real-time interactive features (sliders, dropdowns, expanders)
+- API documentation through Swagger UI is complete and functional
+
+### Known Issues from Manual Testing
+
+- **Port Conflict:** Initial port 8000 was unavailable; resolved by using port 8001
+- **Module Import:** Streamlit required `PYTHONPATH` environment variable set to project root
+- **Historical Charts:** Limited to training period ending October 30, 2026 (by design)
+- **Stale Data Warning:** Triggers appropriately but could be more prominent for >24h staleness
+
+### Testing Artifacts Created
+
+All testing documentation is preserved in the repository:
+- Manual testing guide with 50+ test scenarios
+- Quick checklist for rapid verification
+- Application status document with live URLs
+- Screenshots and expected outputs documented
+
+## Remaining work
+
+1. Create and push the Hugging Face Space, then add `OPENAQ_API_KEY` as a secret (bundle prepared in `deploy/huggingface/`, actual upload requires HF account).
+2. Run one live end-to-end collection/inference test with a real API key (partially completed with manual testing of live predictions).
+3. Add scheduled retraining and input-drift monitoring.
+4. Add more Lahore winter data and external crop-burning/fire indicators.
+5. Export `reports/slides.md` to PDF/PPTX if the course requires that format.

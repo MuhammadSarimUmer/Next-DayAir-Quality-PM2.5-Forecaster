@@ -213,10 +213,10 @@ def compare_with_baseline():
     
     # From baseline.py results (Task 9)
     baseline_test = {
-        'mae': 14.64,
-        'rmse': 27.17,
-        'r2': 0.5765,
-        'aqi_accuracy': 0.6983
+        'mae': 14.54,
+        'rmse': 26.98,
+        'r2': 0.5700,
+        'aqi_accuracy': 0.6999
     }
     
     print("\nBaseline (Persistence) - Test Set:")

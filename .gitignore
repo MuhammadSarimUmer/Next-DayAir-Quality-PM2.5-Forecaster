@@ -33,13 +33,20 @@ sem-env/
 # Generated reports, plots, and experiment outputs
 reports/*
 !reports/.gitkeep
-!reports/figures/.gitkeep
+!reports/figures/
+!reports/figures/*.png
+!reports/error_analysis.md
+!reports/final_report.md
+!reports/demo_script.md
+!reports/slides.md
 
 # Trained models and serialized pipelines
 *.joblib
 *.pkl
 *.pickle
-models/
+models/*
+!models/final_pipeline.joblib
+!models/model_metadata.json
 
 # Local logs and temporary files
 *.log

@@ -1,0 +1,93 @@
+{
+  "trained_at_utc": "2026-11-12T15:58:38.710761+00:00",
+  "model_type": "VotingRegressor(ridge=0.2, rf=0.3, lgbm=0.5)",
+  "features": [
+    "pm25_now",
+    "pm25_lag_1h",
+    "pm25_lag_3h",
+    "pm25_lag_6h",
+    "pm25_lag_12h",
+    "pm25_lag_24h",
+    "pm25_roll_mean_6h",
+    "pm25_roll_mean_24h",
+    "pm25_roll_mean_72h",
+    "temperature_2m",
+    "relative_humidity_2m",
+    "surface_pressure",
+    "wind_speed_10m",
+    "precipitation",
+    "cloud_cover",
+    "hour",
+    "month",
+    "weekday",
+    "is_winter",
+    "city",
+    "pm25_diff_3h",
+    "pm25_roll_std_24h",
+    "pm25_roll_max_24h",
+    "pm25_change_6h",
+    "pm25_change_24h",
+    "pm25_rate_of_change",
+    "pm25_7d_lag",
+    "pm25_roll_min_24h",
+    "pm25_acceleration",
+    "stagnation_index",
+    "smog_season_intensity",
+    "lahore_smog_risk",
+    "pm25_lag_excess_24h",
+    "pm25_lag_excess_72h",
+    "pm25_clearing_index",
+    "pm25_cams_divergence",
+    "cams_pm25_change_24h",
+    "cams_pm2_5",
+    "cams_dust",
+    "cams_aod",
+    "pressure_change_24h",
+    "wind_speed_roll_mean_24h",
+    "precip_sum_24h",
+    "hour_sin",
+    "hour_cos",
+    "wind_dir_sin",
+    "wind_dir_cos"
+  ],
+  "n_features": 47,
+  "train_rows": 16029,
+  "val_rows": 3442,
+  "fit_rows": 19471,
+  "test_rows": 3492,
+  "test_metrics_raw": {
+    "mae": 13.30916635258083,
+    "rmse": 23.65132867227723,
+    "r2": 0.6695035786041316,
+    "aqi_accuracy": 0.7164948453608248
+  },
+  "test_metrics_clearing_blend": {
+    "mae": 13.506232075856381,
+    "rmse": 24.76247562817489,
+    "r2": 0.6377204689828578,
+    "aqi_accuracy": 0.7133447880870561
+  },
+  "test_metrics_buffered": {
+    "mae": 13.34695406473712,
+    "rmse": 23.660494549459937,
+    "r2": 0.6692473666476777,
+    "aqi_accuracy": 0.6921534936998854
+  },
+  "per_city_test_metrics": {
+    "karachi": {
+      "mae": 6.198789844589129,
+      "rmse": 9.45550090981155,
+      "r2": 0.728232189550187,
+      "aqi_accuracy": 0.8201603665521191
+    },
+    "lahore": {
+      "mae": 20.41954286057253,
+      "rmse": 32.08370612121858,
+      "r2": 0.5591035605387478,
+      "aqi_accuracy": 0.6128293241695304
+    }
+  },
+  "aqi_reference": "Unhealthy for Sensitive Groups",
+  "package_python": "3.14.7",
+  "artifact": "models\\final_pipeline.joblib"
+}

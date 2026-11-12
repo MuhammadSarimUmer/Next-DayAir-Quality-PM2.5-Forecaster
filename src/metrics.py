@@ -300,7 +300,7 @@ if __name__ == '__main__':
     for i, (t, p) in enumerate(zip(y_true, y_pred)):
         true_cat = pm25_to_aqi_category(t)
         pred_cat = pm25_to_aqi_category(p)
-        match = "✓" if true_cat == pred_cat else "✗"
+        match = "OK" if true_cat == pred_cat else "X"
         print(f"  {i+1}. True: {t:6.1f} ({true_cat:25s}) | Pred: {p:6.1f} ({pred_cat:25s}) {match}")
     
     # Calculate metrics

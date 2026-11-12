@@ -8,9 +8,11 @@ This document records the known limitations, failure modes, and design trade-off
 
 ### What was observed
 
-After completing the modelling stage, the top feature by importance was `pm25_now` at **86.0%**. All remaining 34 features combined accounted for only 14% of the model's decisions. This was confirmed across all four trained models (Ridge, KNN, Random Forest, LightGBM).
+After completing the initial 35-feature modelling stage, the top feature by importance was `pm25_now` at **86.0%**. The other 34 features combined accounted for only 14% of the model's decisions. This was confirmed across all four trained models (Ridge, KNN, Random Forest, LightGBM). The current model has since grown to **47 features** (see below), but `pm25_now` remains the dominant signal, so the same persistence ceiling applies.
 
-An explicit improvement attempt was made in November 2026 (Option 1): five new momentum and trend features were added to `features.py`:
+An explicit improvement attempt was made in November 2026: five new momentum and
+trend features were added to `features.py`, followed by domain and regime features.
+The current model uses **47 features**:
 
 | Feature | Purpose |
 |---------|---------|
@@ -24,7 +26,18 @@ An explicit improvement attempt was made in November 2026 (Option 1): five new m
 | `smog_season_intensity` | Continuous curve for Punjab crop-residue burning season |
 | `lahore_smog_risk` | Winter stagnation interaction specialized for Lahore |
 
-After retraining with these 39 features and evaluating a Blended Ensemble (combining Ridge, Random Forest, and LightGBM), overall test MAE improved to **13.21 µg/m³** (from 14.64 baseline, +9.7% improvement) and AQI category accuracy reached **71.83%** (with Lahore improving to **61.23%** and MAE dropping to 20.27 µg/m³).
+After retraining with all 47 features and evaluating the weighted ensemble (Ridge
+0.2 + Random Forest 0.3 + LightGBM 0.5), the current held-out test results are:
+
+| Metric | Baseline | Ensemble |
+|---|---:|---:|
+| MAE | 14.54 µg/m³ | **13.31 µg/m³** (+8.5%) |
+| RMSE | 26.98 µg/m³ | **23.65 µg/m³** (+12.3%) |
+| R² | 0.5700 | **0.6695** |
+| AQI accuracy | 69.99% | **71.65%** |
+
+Lahore improved to **20.42 µg/m³ MAE** and **61.3% AQI accuracy**; Karachi is at
+**6.20 µg/m³** and **82.0%**.
 
 ### Why it happened
 
@@ -32,7 +45,7 @@ All new features are derived from `pm25` itself and are therefore highly correla
 
 ### Implication
 
-The model is, in essence, a sophisticated persistence forecast. It answers "what will PM2.5 be in 24 hours?" primarily by saying "roughly what it is right now, adjusted slightly by weather and calendar." For stable cities like Karachi this works well (AQI accuracy: 82.6%). For high-variance cities like Lahore it falls short (AQI accuracy: 60.1%).
+The model is, in essence, a sophisticated persistence forecast. It answers "what will PM2.5 be in 24 hours?" primarily by saying "roughly what it is right now, adjusted slightly by weather and calendar." For stable cities like Karachi this works well (AQI accuracy: 82.0%). For high-variance cities like Lahore it falls short (AQI accuracy: 61.3%).
 
 ### What would actually help
 
@@ -49,10 +62,10 @@ The model is, in essence, a sophisticated persistence forecast. It answers "what
 
 | City | Test MAE | Test AQI Accuracy |
 |------|----------|-------------------|
-| Karachi | 6.15 µg/m³ | 82.44% |
-| Lahore | 20.27 µg/m³ | 61.23% |
+| Karachi | 6.20 µg/m³ | 82.0% |
+| Lahore | 20.42 µg/m³ | 61.3% |
 
-Lahore performs **3.3× worse** on MAE and **22.5 percentage points worse** on AQI accuracy.
+Lahore performs **3.3× worse** on MAE and **20.7 percentage points worse** on AQI accuracy.
 
 ### Why it happened
 
@@ -78,7 +91,7 @@ Forecasts for Lahore during smog season onset should be treated with extra cauti
 
 ### What was observed
 
-- 12 Karachi sensors and 16 Lahore sensors were used (community/low-cost monitors, not regulatory reference instruments).
+- 12 Karachi and 18 configured Lahore sensors were used (community/low-cost monitors, not regulatory reference instruments).
 - After cleaning: Karachi had 0.66% missing PM2.5 hours (longest gap: 67 hours). Lahore had 0.09% missing (longest gap: 5 hours).
 - Gaps of up to 3 hours were linearly interpolated. Longer gaps remain as NaN and are excluded from training.
 - Station `13817570` (Thokar Niaz Baig, Lahore) was successfully collected into `data/raw/` (7,696 rows). Station `14599816` (ARC Lahore) was deployed in late November 2025 and had minimal overlapping coverage for earlier months.
@@ -95,7 +108,10 @@ The data is not reference-grade. Forecasts are appropriate for public awareness 
 
 One model is trained on data from both cities with `city` as a one-hot encoded feature. This forces the model to find a single function that works for both Karachi and Lahore simultaneously.
 
-An experimental city-specialist router (`CityRouter` in `src/train_city_router.py`) was implemented to test whether two separate models (one trained strictly on Karachi, one strictly on Lahore) could outperform the combined model.
+An experimental city-specialist router was implemented in an earlier 35-feature run
+(the experiment was not retained in the final source tree) to test whether two
+separate models (one trained strictly on Karachi, one strictly on Lahore) could
+outperform the combined model.
 
 ### Findings
 
@@ -109,7 +125,28 @@ The joint model with one-hot encoded `city` remains the superior architecture. T
 
 ---
 
-## 5. No Real-Time Re-training
+## 5. Rejected Post-Processing Variants
+
+### What was observed
+
+Two simple corrections were tested on the held-out test split:
+
+| Variant | MAE | RMSE | R² | AQI accuracy |
+|---|---:|---:|---:|---:|
+| Raw ensemble | **13.31** | **23.65** | **0.6695** | **71.65%** |
+| Lahore clearing/recovery blend (`src/postprocess.py`) | 13.51 | 24.76 | 0.6377 | 71.33% |
+| Conservative AQI boundary buffers (`src/evaluate.py`) | 13.35 | 23.66 | 0.6692 | 69.22% |
+
+### Implication
+
+Both heuristics made the test metrics worse, so neither is enabled by default. They
+remain in the repository as documented experiments. The deployed Streamlit/FastAPI
+services use raw ensemble output unless a caller explicitly enables the optional
+clearing blend.
+
+---
+
+## 6. No Real-Time Re-training
 
 ### What was observed
 
@@ -121,7 +158,7 @@ Model performance will degrade over time as climate patterns shift, new pollutio
 
 ---
 
-## 6. US EPA AQI Breakpoints Applied to Pakistan
+## 7. US EPA AQI Breakpoints Applied to Pakistan
 
 ### What was observed
 
@@ -133,6 +170,54 @@ The AQI accuracy figures are computed against a foreign standard. Health thresho
 
 ---
 
+## 8. Historical Chart Data and Offline Snapshots
+
+### What was observed
+
+- The historical PM2.5 trend chart in the Streamlit application displays data from the training period, which ends at **2026-10-30 23:00 PKT**.
+- The offline snapshot fallback file (`data/processed/live_fallback.csv`) contains the most recent feature row from this training period.
+- In offline mode, predictions use this snapshot with a staleness indicator showing **312+ hours** (13+ days).
+
+### Implication
+
+The historical trend chart provides context for model training but is not live. In offline mode, predictions are demonstrations using stale data and should **not** be treated as current air quality alerts. The application clearly labels offline predictions and displays staleness warnings when data age exceeds 30 hours.
+
+Users testing the application should:
+- Use **live mode** for current forecasts (requires `OPENAQ_API_KEY`)
+- Treat **offline mode** as a demonstration of functionality with historical data
+- Check the "Data freshness" section for staleness indicators
+
+---
+
+## 9. Hugging Face Deployment Status
+
+### What was observed
+
+A complete Hugging Face Space deployment bundle has been prepared in `deploy/huggingface/` including:
+- Space configuration (`README.md` with YAML header)
+- Application code (`app.py` - Streamlit interface)
+- Model file and metadata
+- Requirements and dependencies
+- Historical data for charts
+- Error analysis figures
+
+The bundler script (`prepare_space.py`) successfully creates a deployable Space folder with all necessary artifacts.
+
+### Current Status
+
+The deployment bundle is **prepared and ready** but the actual Space has **not yet been uploaded** to Hugging Face. This requires:
+1. A Hugging Face account and authentication token
+2. Pushing the bundle to a Space repository
+3. Adding `OPENAQ_API_KEY` as a Space secret for live predictions
+
+### Implication
+
+The application is production-ready and has been manually tested locally with both FastAPI backend and Streamlit frontend. Deployment to Hugging Face Spaces is straightforward following the documented procedure in `deploy/huggingface/README.md`, but requires account credentials that were not available in the development environment.
+
+For evaluation purposes, the locally running application at `http://localhost:8502` demonstrates full production functionality including live API data fetching, offline fallback, and all interactive features.
+
+---
+
 ## Summary Table
 
 | Limitation | Severity | Mitigation Available |
@@ -141,6 +226,10 @@ The AQI accuracy figures are computed against a foreign standard. Health thresho
 | Lahore–Karachi performance gap | High | City-specific models, more Lahore historical data |
 | Community sensor data quality | Medium | Disclosed in DATA_SOURCES.md; use as awareness tool only |
 | Single combined-city model | Medium | Train separate models per city |
+| Post-processing heuristics did not help | Low | Disabled by default; documented in report |
 | No real-time retraining | Low (for coursework) | Schedule periodic retraining for production |
 | US EPA breakpoints used for Pakistan | Low | Note in report; apply local standard if available |
+| Historical chart data ends Oct 2026 | Low | Expected behavior; chart shows training period |
+| Offline snapshot staleness | Low | Clearly labeled; use live mode for current forecasts |
+| Hugging Face Space not yet deployed | Low | Bundle prepared; requires HF account for upload |
 

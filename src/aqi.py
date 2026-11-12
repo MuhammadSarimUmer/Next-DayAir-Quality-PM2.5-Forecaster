@@ -6,7 +6,7 @@ health categories, color codes, and practical actionable guidance for
 the general public and sensitive groups.
 """
 
-from typing import Dict, Any, Union
+from typing import Dict, Any
 import numpy as np
 
 
@@ -22,48 +22,55 @@ BREAKPOINTS = [
 ]
 
 
+def _truncate_to_breakpoint_resolution(pm25: float) -> float:
+    """EPA AQI tables use 0.1 µg/m³ resolution; truncate instead of rounding.
+
+    Truncation closes the nominal gaps between table rows (for example 9.05)
+    and prevents such values from falling through every range.
+    """
+    if pm25 is None or not np.isfinite(pm25):
+        raise ValueError("pm25 must be a finite number")
+    return float(np.floor(max(0.0, float(pm25)) * 10.0) / 10.0)
+
+
 def calculate_aqi(pm25: float) -> int:
     """
     Calculate US EPA AQI index value from PM2.5 concentration (µg/m³).
-    
+
     Formula:
         I = ((I_high - I_low) / (C_high - C_low)) * (C - C_low) + I_low
     """
-    if pm25 < 0:
-        return 0
-    
+    pm25 = _truncate_to_breakpoint_resolution(pm25)
+
     # Cap / extrapolate for extreme values above 500 µg/m³
     if pm25 > 500.4:
         return min(999, int(500 + (pm25 - 500.4) * 0.5))
-    
+
     for c_low, c_high, i_low, i_high, _, _, _ in BREAKPOINTS:
         if c_low <= pm25 <= c_high:
             aqi = ((i_high - i_low) / (c_high - c_low)) * (pm25 - c_low) + i_low
             return int(round(aqi))
-            
+
     return 500
 
 
 def get_aqi_category_info(pm25: float) -> Dict[str, Any]:
-    """
-    Get category metadata (name, color, hex) for a given PM2.5 level.
-    """
-    if pm25 < 0:
-        pm25 = 0.0
-        
+    """Get category metadata (name, color, hex) for a given PM2.5 level."""
+    pm25 = _truncate_to_breakpoint_resolution(pm25)
+
     for c_low, c_high, _, _, category, color, hex_code in BREAKPOINTS:
         if c_low <= pm25 <= c_high:
             return {
                 "category": category,
                 "color_name": color,
-                "hex_color": hex_code
+                "hex_color": hex_code,
             }
-            
+
     # Greater than 500.4
     return {
         "category": "Hazardous",
         "color_name": "Maroon",
-        "hex_color": "#7E0023"
+        "hex_color": "#7E0023",
     }
 
 
