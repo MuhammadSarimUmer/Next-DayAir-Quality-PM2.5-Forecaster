@@ -12,8 +12,8 @@ OpenAQ with hourly weather variables from Open-Meteo.
 - **Download code:** [`src/collect.py`](./src/collect.py)
 - **API client:** [`src/openaq_api.py`](./src/openaq_api.py)
 - **Raw data directory:** [`data/raw/`](./data/raw/)
-- **Requested period:** 2025-06-23 through 2026-10-31 UTC, as configured in
-  [`src/config.py`](./src/config.py) (earliest reporting sensors began late May 2025; no pre-2025 community sensors existed on OpenAQ for these cities).
+- **Requested period:** 2025-06-23 through 2026-11-18 UTC, as configured in
+  [`src/config.py`](./src/config.py). Collection performed on November 18, 2026. Earliest reporting sensors began late May 2025; no pre-2025 community sensors existed on OpenAQ for these cities.
 - **Time handling:** OpenAQ timestamps are retained as UTC in the raw files and
   converted to Pakistan Standard Time (PKT, UTC+05:00) during cleaning.
 - **Provider:** The selected sensors are listed by OpenAQ as AirGradient

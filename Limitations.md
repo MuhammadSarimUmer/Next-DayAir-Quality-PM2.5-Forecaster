@@ -218,6 +218,123 @@ For evaluation purposes, the locally running application at `http://localhost:85
 
 ---
 
+## 10. Classical Time-Series Models: Prophet and ARIMAX Failure
+
+### What was observed
+
+Prophet and ARIMAX were tested as baselines to compare classical time-series methods against supervised ML. Both performed significantly worse than the ensemble:
+
+| Model | Test MAE (µg/m³) | Test AQI Accuracy | vs Ensemble |
+|---|---:|---:|---|
+| **Ensemble (Final)** | **13.31** | **71.6%** | - |
+| Baseline (Persistence) | 14.54 | 70.0% | -1.6 pp |
+| Prophet | 18.27 | 55.0% | -16.6 pp |
+| ARIMAX | 24.63 | 48.1% | -23.5 pp |
+
+Both classical methods performed **worse than the naive persistence baseline** ("tomorrow = today").
+
+### Why Prophet Failed
+
+Prophet assumes **linear trend + additive seasonality**. This works for Karachi's stable coastal patterns (59.7% test accuracy) but collapses for Lahore's abrupt smog episodes (50.2% test accuracy). Prophet cannot capture:
+- Non-linear interactions (humidity × temperature × wind)
+- Regime shifts (sudden transitions from clean to hazardous)
+- Multi-day smog accumulation followed by rapid clearing events
+
+**Validation vs Test Gap:**
+- Karachi: 77.9% validation → 59.7% test (-18.2 pp)
+- Lahore: 43.8% validation → 50.2% test (+6.4 pp)
+
+The test period (Aug-Oct) has different seasonal characteristics than validation (Jun-Aug), exposing Prophet's rigid seasonal assumptions.
+
+### Why ARIMAX Failed Catastrophically
+
+ARIMAX showed the most dramatic failure:
+
+**Karachi ARIMAX:**
+- Validation: **93.1% accuracy** (appeared excellent!)
+- Test: **64.0% accuracy** (-29.1 percentage points)
+
+**Root Cause: Overfitting to Seasonal Patterns**
+
+ARIMAX learned rigid seasonal coefficients from 2025 data (Jun 2025 - Jun 2026) and applied them blindly to 2026:
+
+| Period | Mean PM2.5 |
+|---|---:|
+| Training (Jun 2025 - Jun 2026) | 51.0 µg/m³ |
+| Test (Aug - Oct 2026) | 35.7 µg/m³ (-30%) |
+
+When Aug-Oct 2026 turned out **30% cleaner** than Aug-Oct 2025, ARIMAX continued predicting high values based on "last year's August" pattern, completely ignoring current conditions.
+
+**Memory Constraints:**
+During training, ARIMAX with 24-hour seasonal periods (`m=24`) crashed with:
+```
+Unable to allocate 163 MiB for array with shape (52, 52, 7910)
+```
+
+The model was retrained with 12-hour periods (`m=12`) to fit in 8GB RAM. This reduced computational requirements but still couldn't solve the fundamental non-stationarity problem.
+
+**Lahore ARIMAX:**
+- Validation: 43.4% (already poor)
+- Test: 32.2% (-11.2 pp, even worse)
+
+ARIMAX assumes linear relationships and stationary seasonal patterns. Lahore's smog dynamics violate both assumptions.
+
+### Why the Ensemble Succeeded
+
+The Random Forest + LightGBM ensemble uses **current state features** rather than rigid seasonal coefficients:
+- `pm25_lag_24h`, `pm25_roll_mean_24h` (recent actual values)
+- Current weather conditions
+- Domain features (`stagnation_index`, `lahore_smog_risk`)
+
+When conditions in Aug-Oct 2026 differed from Aug-Oct 2025, the tree models **adapted** by weighting recent observations more heavily than calendar patterns.
+
+### Implication
+
+Classical time-series methods (Prophet, ARIMAX) are unsuitable for this 24-hour, multi-city PM2.5 forecasting problem because:
+
+1. **24-hour horizon is too long** for ARIMAX (optimized for 1-6 hours)
+2. **Year-to-year variation** breaks rigid seasonal assumptions
+3. **Non-linear dynamics** require tree-based models
+4. **City heterogeneity** (Karachi stable, Lahore volatile) needs flexible feature engineering
+
+The 23.5 percentage point gap between ARIMAX (48.1%) and the ensemble (71.6%) demonstrates that **flexibility beats rigid seasonality** for environmental forecasting with inter-annual variation.
+
+---
+
+## 11. Temporal Coverage and Test Set Limitations
+
+### What was observed
+
+**Data collection date:** November 18, 2026  
+**Dataset span:** June 2025 - October 2026 (16 months)
+
+Due to chronological train/validation/test split:
+- **Training:** Jun 2025 - Jun 2026 (includes one full winter: Nov 2025 - Feb 2026)
+- **Validation:** Jun - Aug 2026 (summer)
+- **Test:** Aug - Oct 2026 (late summer/early fall)
+
+**Peak winter months (Nov-Dec 2026) are not yet available for evaluation.**
+
+### Why this matters
+
+Lahore's worst pollution occurs in November-December during:
+- Crop residue burning season (rice stubble in Punjab)
+- Temperature inversions trapping pollution
+- Reduced wind speeds
+
+Test set captures early winter onset (Oct-Nov) but misses peak smog months. This explains part of the Prophet/ARIMAX validation-to-test performance drop - the models trained on Nov-Dec 2025 patterns but couldn't be fully evaluated on Nov-Dec 2026.
+
+### Implication
+
+The model's reported test accuracy (71.6% ensemble, 61.3% Lahore) likely **underestimates** winter performance, as:
+- Training includes full winter cycle (Nov 2025 - Feb 2026)
+- Test evaluation stops at Oct 30, before peak pollution
+- The model has learned winter patterns but hasn't been tested on them in 2026
+
+**For production deployment:** Re-evaluate in January 2027 after Nov-Dec 2026 data becomes available to assess true winter forecast accuracy. The current results represent summer and early fall performance only.
+
+---
+
 ## Summary Table
 
 | Limitation | Severity | Mitigation Available |

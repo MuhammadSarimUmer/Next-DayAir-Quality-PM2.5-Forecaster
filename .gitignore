@@ -39,6 +39,8 @@ reports/*
 !reports/final_report.md
 !reports/demo_script.md
 !reports/slides.md
+!reports/all_models_comparison.json
+!reports/manual_testing_guide.md
 
 # Trained models and serialized pipelines
 *.joblib

@@ -35,7 +35,7 @@ CAMS_COLS = ["cams_pm2_5", "cams_dust", "cams_aod"]
 # Attempted to extend to 2022 but sensors were installed ~2024-2025.
 # Documented in Limitations.md.
 START_DATE = "2025-06-23"
-END_DATE = "2026-10-31"
+END_DATE = "2026-11-18"  # Current date - partial Nov coverage
 
 # Kaggle 2021-24 hourly API history (datasets/2021-24); OpenAQ wins on overlap.
 USE_KAGGLE_HISTORY = False

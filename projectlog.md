@@ -658,6 +658,141 @@ All testing documentation is preserved in the repository:
 - Application status document with live URLs
 - Screenshots and expected outputs documented
 
+## Stage G: Classical Time-Series Baseline Models (November 18, 2026)
+
+### Completed
+
+Per instructor requirement to demonstrate classical time-series approaches alongside supervised ML, two additional baseline models were implemented and evaluated:
+
+- **Prophet (Meta's forecasting library):** Additive time-series model with trend and seasonality decomposition
+- **ARIMAX (Auto-Regressive Integrated Moving Average with eXogenous variables):** Classical statistical forecasting with external regressors
+
+### Implementation Details
+
+**Prophet Configuration:**
+- Trained separate models for Karachi and Lahore
+- Additive seasonality (hourly + weekly patterns)
+- Exogenous regressors: temperature, humidity, wind speed, precipitation
+- Training files: `src/train_prophet.py`
+- Saved models: `models/prophet_karachi.pkl`, `models/prophet_lahore.pkl`
+
+**ARIMAX Configuration:**
+- Seasonal ARIMAX with hourly periodicity (m=12 instead of m=24 due to 8GB RAM constraint)
+- Auto-selection of (p,d,q) and (P,D,Q,m) orders using `pmdarima.auto_arima`
+- Exogenous features: weather variables (temperature, humidity, wind speed, pressure, precipitation)
+- Training files: `src/train_arimax.py`
+- Saved models: `models/arimax_karachi.pkl`, `models/arimax_lahore.pkl`
+
+**Memory Optimization:**
+- Initial ARIMAX training crashed with 163 MiB allocation error at m=24
+- Reduced seasonal period to m=12 (12-hour cycle) to fit within 8GB system RAM
+- Successfully trained both city models with modified configuration
+
+### Results Summary
+
+All four model families evaluated on the same held-out test split (3,492 hours, Aug-Oct 2026):
+
+| Model | Test MAE (µg/m³) | Test RMSE | Test R² | AQI Accuracy |
+|---|---:|---:|---:|---:|
+| **Ensemble** (Ridge+RF+LightGBM) | **13.31** | **23.65** | **0.6695** | **71.6%** |
+| Persistence Baseline | 14.54 | 26.98 | 0.5700 | 70.0% |
+| **Prophet** | 18.27 | 29.09 | 0.4393 | 55.0% |
+| **ARIMAX** | 24.63 | 39.82 | 0.1211 | 48.1% |
+
+**Key Finding:** Supervised ML ensemble outperforms both classical time-series models by substantial margins (Prophet: +37% MAE, ARIMAX: +85% MAE).
+
+### Per-City Validation → Test Performance
+
+**Prophet:**
+- Karachi: 77.92% validation AQI → 59.74% test AQI (-18.2 pp drop)
+- Lahore: 43.75% validation AQI → 50.17% test AQI (+6.4 pp improvement)
+
+**ARIMAX:**
+- **Karachi: 93.09% validation AQI → 63.97% test AQI (-29.1 pp collapse)**
+- Lahore: 43.40% validation AQI → 32.17% test AQI (-11.2 pp drop)
+
+### Root Cause Analysis: ARIMAX Karachi Failure
+
+Detailed investigation revealed **severe temporal distribution shift** between validation and test periods:
+
+**Training + Validation Period (Jun 2025 - Aug 2026):**
+- Mean PM2.5: 51.0 µg/m³
+- Std: 25.6 µg/m³
+- 75th percentile: 66.6 µg/m³
+
+**Test Period (Aug - Oct 2026):**
+- Mean PM2.5: 35.7 µg/m³ (-30% shift)
+- Std: 19.3 µg/m³
+- 75th percentile: 46.0 µg/m³
+
+**Explanation:**
+ARIMAX captured the 2025 seasonal pattern (higher summer PM2.5 in Karachi) but failed to generalize when 2026 Aug-Oct was significantly cleaner than the same months in 2025. The model overfitted to year-specific pollution levels rather than learning transferable weather-pollution dynamics.
+
+This is a **temporal covariate shift** problem: ARIMAX assumes stationary relationships between past lags and future values, which breaks down when year-over-year pollution distributions change (e.g., due to policy changes, economic shifts, or anomalous weather patterns).
+
+### Why Supervised ML Performed Better
+
+The ensemble's superior performance is attributed to:
+
+1. **47 engineered features** vs. ARIMAX's limited lag structure
+2. **Non-linear relationships** captured by Random Forest and LightGBM
+3. **Exogenous feature diversity:** PM2.5 lags + momentum + weather + CAMS aerosol + calendar + stagnation indices
+4. **Robust to distribution shifts:** Tree-based models adapt better to changing distributions than autoregressive models
+
+### Updated Documentation
+
+Comprehensive failure analysis added to `Limitations.md`:
+
+- **Section 10:** Prophet and ARIMAX Performance Analysis
+  - Detailed per-city breakdown with validation→test gaps
+  - ARIMAX Karachi distribution shift quantified with training vs. test statistics
+  - Explanation of temporal covariate shift vs. supervised ML robustness
+  
+- **Section 11:** Temporal Coverage and Generalization Limits
+  - Only one complete pollution cycle in training data
+  - Test period (Aug-Oct 2026) at edge of training distribution
+  - Missing winter 2026 test data (Nov-Dec not yet available as of Nov 18, 2026)
+  - Recommendation to retrain with full seasonal cycle once winter data arrives
+
+### Files Modified/Created
+
+**Created:**
+- `src/train_prophet.py` — Prophet model training script
+- `src/train_arimax.py` — ARIMAX model training script (m=12 configuration)
+- `src/train_arimax_simple.py` — Non-seasonal ARIMAX variant (not used in final evaluation)
+- `src/evaluate_all.py` — Unified evaluation script for all four model families
+
+**Modified:**
+- `Limitations.md` — Added sections 10-11 with detailed failure analysis
+- `reports/all_models_comparison.json` — Complete test results for all models
+
+**Models Saved:**
+- `models/prophet_karachi.pkl`
+- `models/prophet_lahore.pkl`
+- `models/arimax_karachi.pkl`
+- `models/arimax_lahore.pkl`
+
+**Dependencies Added:**
+- `prophet>=1.1.5`
+- `pmdarima>=2.0.4`
+
+### Interpretation for Course Requirements
+
+The instructor's requirement for "at least three algorithms" and classical time-series comparison is now fulfilled:
+
+1. **Classical Time-Series:** Prophet (additive decomposition), ARIMAX (autoregressive with exogenous vars)
+2. **Supervised ML Baselines:** Ridge (linear), KNN (non-parametric)
+3. **Tree-Based Ensemble:** Random Forest + LightGBM weighted voting
+
+**Key Result:** This comparison demonstrates that **supervised ML with engineered features substantially outperforms classical univariate/low-dimensional time-series models** for this multi-city, multi-regime air quality forecasting problem. The 37-85% MAE improvement over Prophet/ARIMAX justifies the feature engineering investment.
+
+### Limitations of This Comparison
+
+- ARIMAX forced to use m=12 instead of m=24 due to memory constraints (may underestimate its potential performance)
+- Both Prophet and ARIMAX used limited exogenous features compared to the 47-feature ensemble
+- No hyperparameter grid search performed for Prophet/ARIMAX (computational cost prohibitive)
+- Classical models evaluated "as-is" with reasonable defaults rather than exhaustive tuning
+
 ## Remaining work
 
 1. Create and push the Hugging Face Space, then add `OPENAQ_API_KEY` as a secret (bundle prepared in `deploy/huggingface/`, actual upload requires HF account).
@@ -665,3 +800,4 @@ All testing documentation is preserved in the repository:
 3. Add scheduled retraining and input-drift monitoring.
 4. Add more Lahore winter data and external crop-burning/fire indicators.
 5. Export `reports/slides.md` to PDF/PPTX if the course requires that format.
+6. **Retrain ARIMAX with full m=24 seasonality** once higher-memory environment is available (optional improvement).

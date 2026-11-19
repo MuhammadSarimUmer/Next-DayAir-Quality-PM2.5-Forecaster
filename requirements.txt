@@ -11,3 +11,5 @@ fastapi
 uvicorn
 pytest
 jupytext
+prophet>=1.1.5
+pmdarima>=2.0.4
