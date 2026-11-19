@@ -38,6 +38,9 @@ START_DATE = "2025-06-23"
 END_DATE = "2026-11-18"  # Current date - partial Nov coverage
 
 # Kaggle 2021-24 hourly API history (datasets/2021-24); OpenAQ wins on overlap.
+# Set True to extend training data back to Aug 2021 using Kaggle API history.
+# Outputs go to data/kaggle_extended/, models/kaggle_extended/, reports/kaggle_extended/.
+# See Limitations.md Section 12 for experiment results and caveats.
 USE_KAGGLE_HISTORY = False
 KAGGLE_HISTORY_END = "2024-12-12"
 WEATHER_START_DATE = "2021-08-24" if USE_KAGGLE_HISTORY else START_DATE
@@ -122,5 +125,5 @@ EXTRA_FEATURES = True
 
 TRAIN_FRAC = 0.70
 VAL_FRAC = 0.15
-# Fewer CV folds when train set is large (Kaggle history ~50k rows).
-CV_SPLITS = 3 if USE_KAGGLE_HISTORY else 5
+# 5-fold CV as required by course rubric (CT-378).
+CV_SPLITS = 5

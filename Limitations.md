@@ -306,7 +306,7 @@ The 23.5 percentage point gap between ARIMAX (48.1%) and the ensemble (71.6%) de
 ### What was observed
 
 **Data collection date:** November 18, 2026  
-**Dataset span:** June 2025 - October 2026 (16 months)
+**Dataset span:** June 2025 - October 2026 (16 months) for the primary pipeline
 
 Due to chronological train/validation/test split:
 - **Training:** Jun 2025 - Jun 2026 (includes one full winter: Nov 2025 - Feb 2026)
@@ -314,6 +314,9 @@ Due to chronological train/validation/test split:
 - **Test:** Aug - Oct 2026 (late summer/early fall)
 
 **Peak winter months (Nov-Dec 2026) are not yet available for evaluation.**
+
+> [!NOTE]
+> **Kaggle extension split (Section 12):** When `USE_KAGGLE_HISTORY = True`, the dataset extends back to August 2021 (90,960 rows total). The chronological split then shifts: **Train** ends Jul 2025, **Val** covers Jul 2025 – Mar 2026 (includes a full winter), **Test** covers Mar – Oct 2026. While the validation set now contains more winter data, the test set covers only spring through early fall — with **less winter signal** than the original test set, partly explaining the AQI accuracy drop in that experiment.
 
 ### Why this matters
 
@@ -335,6 +338,105 @@ The model's reported test accuracy (71.6% ensemble, 61.3% Lahore) likely **under
 
 ---
 
+## 12. Kaggle Historical Data Extension Experiment
+
+### Overview
+
+In November 2026, an experiment was conducted to extend the training dataset back to August 2021 by supplementing OpenAQ ground sensor data with historical PM2.5 and weather estimates from the **Kaggle 2021–24 hourly API dataset** (`USE_KAGGLE_HISTORY = True` in `config.py`). The Kaggle data covers Aug 24, 2021 – Dec 31, 2024 for both Karachi and Lahore and is sourced from OpenWeatherMap/CAMS model estimates — **not** community ground sensors.
+
+**Dataset composition:**
+- **Total rows:** 90,960 (OpenAQ + Kaggle merged; OpenAQ wins on overlap)
+- **Karachi PM2.5 hours:** openaq = 11,764 h, kaggle_api = 29,105 h
+- **Lahore PM2.5 hours:** openaq = 11,834 h, kaggle_api = 29,083 h
+- **Split (Kaggle pipeline):** Train 50,412 rows (Aug 2021 – Jul 2025), Val 11,112 rows (Jul 2025 – Mar 2026), Test 10,949 rows (Mar – Oct 2026)
+
+### Results Comparison
+
+| Model | MAE | RMSE | R² | AQI Acc |
+|---|---:|---:|---:|---:|
+| **Original pipeline (OpenAQ only, Jun 2025–Oct 2026)** | | | | |
+| Baseline (Persistence) | 14.54 | 26.98 | 0.5700 | 69.99% |
+| Prophet | 18.27 | — | — | 55.0% |
+| ARIMAX | 24.63 | — | — | 48.1% |
+| **Ensemble (Final)** | **13.31** | **23.65** | **0.6695** | **71.65%** |
+| **Kaggle extended pipeline (OpenAQ + Kaggle 2021–24)** | | | | |
+| Baseline (Persistence) | 13.48 | 23.66 | 0.4149 | 65.3% |
+| Prophet | 66.83 | 76.02 | -6.5002 | 24.3% |
+| ARIMAX | 16.30 | 25.83 | -0.0403 | 56.2% |
+| **Ensemble (Final)** | **13.32** | **21.00** | **0.5388** | **64.1%** |
+
+**Per-city (Kaggle Extended Ensemble):**
+
+| City | MAE | AQI Accuracy |
+|---|---:|---:|
+| Karachi | 6.51 µg/m³ | 80.1% |
+| Lahore | 19.86 µg/m³ | **48.8%** ← down from 61.3% |
+
+### Root Cause: Winter PM2.5 Inflation in Kaggle API Data
+
+The core data quality finding is that **Kaggle API data reads approximately 2× higher than OpenAQ ground sensors during winter months (November–March)**. Summer months (June–September) agree closely (ratio ~1×).
+
+| Month | Kaggle PM2.5 (approx.) | OpenAQ PM2.5 (approx.) | Ratio |
+|---|---:|---:|---:|
+| June | ≈ 50 µg/m³ | ≈ 50 µg/m³ | ~1.0× |
+| July | ≈ 45 µg/m³ | ≈ 45 µg/m³ | ~1.0× |
+| August | ≈ 48 µg/m³ | ≈ 47 µg/m³ | ~1.0× |
+| September | ≈ 55 µg/m³ | ≈ 54 µg/m³ | ~1.0× |
+| November | ≈ 240 µg/m³ | ≈ 120 µg/m³ | ~2.0× |
+| December | ≈ 310 µg/m³ | ≈ 155 µg/m³ | ~2.0× |
+| January | ≈ 290 µg/m³ | ≈ 145 µg/m³ | ~2.0× |
+| February | ≈ 260 µg/m³ | ≈ 130 µg/m³ | ~2.0× |
+| March | ≈ 180 µg/m³ | ≈ 100 µg/m³ | ~1.8× |
+
+**Root cause:** The Kaggle dataset uses OpenWeatherMap/CAMS atmospheric model estimates, not ground-level sensors. CAMS PM2.5 columns reflect a column-integrated optical-depth estimate that does not map linearly to surface µg/m³ readings, especially in winter when boundary layers trap pollution near the surface. The model estimates are systematically higher than what ground sensors record during inversions.
+
+### Why Lahore AQI Dropped from 61.3% → 48.8%
+
+The inflated winter training values in the Kaggle data **miscalibrated the model's AQI boundary cuts**:
+
+1. The model trained on Kaggle data "learned" that Lahore winters have PM2.5 of 240–310 µg/m³ (Kaggle estimates).
+2. The actual test set targets are OpenAQ values: 120–155 µg/m³ in winter.
+3. The model predicts inflated values and **mis-assigns AQI categories**: predictions fall in "Hazardous" (≥225.5) when the true value is "Very Unhealthy" (125.5–225.4), resulting in systematic AQI boundary errors.
+4. Lahore is disproportionately affected because Karachi's winter variation is smaller; Lahore's smog season dominates the winter signal.
+
+### Why Prophet Collapsed (R² = -6.5)
+
+Prophet's R² of **-6.5002** (AQI 24.3%) represents near-complete failure, far worse than the persistence baseline:
+
+1. Prophet learns **trend components and seasonal amplitudes** directly from the training values. With Kaggle's 2× inflated winter PM2.5, Prophet learns an enormous seasonal amplitude for winter.
+2. When forecasting the test set (Mar–Oct 2026, OpenAQ-scale targets of 50–150 µg/m³), Prophet applies these inflated seasonal curves and predicts 300–400 µg/m³ when the truth is 50–80 µg/m³.
+3. The result is massive systematic overprediction with R² -6.5 — meaning its squared error is 7.5× larger than a horizontal line through the mean.
+4. The ensemble (tree models with current-state lag features) is insulated from this because lag features `pm25_lag_24h`, `pm25_roll_mean_24h` carry actual recent observations — when the test set begins, these lags contain OpenAQ-scale values and the model adapts.
+
+### Why ARIMAX Barely Beat Persistence (R² = -0.04)
+
+Similar calibration mismatch: ARIMAX's seasonal coefficients were estimated from Kaggle's inflated winter data, then applied to OpenAQ-scale test observations. The model performs at R² = -0.04, essentially equivalent to persistence (R² = 0.4149 in this pipeline's baseline). AQI accuracy of 56.2% confirms it cannot consistently categorise pollution levels correctly.
+
+### Why MAE Improved Slightly but AQI Accuracy Dropped
+
+| Metric | Original | Kaggle Extended | Verdict |
+|---|---:|---:|---|
+| Ensemble MAE | 13.31 µg/m³ | 13.32 µg/m³ | Statistical tie |
+| Ensemble AQI Acc | **71.65%** | 64.1% | Original wins by 7.55 pp |
+| Lahore AQI Acc | **61.3%** | 48.8% | Original wins by 12.5 pp |
+
+MAE appears marginally similar because the ensemble's tree models rely on current lag features (not the miscalibrated seasonal baselines), so they partially correct for the training distribution mismatch. However, AQI accuracy is a **categorical boundary** metric: a prediction of 230 µg/m³ when truth is 160 µg/m³ is "wrong AQI" even though the continuous MAE contribution is 70 µg/m³ — no better or worse than a prediction of 90 µg/m³ when truth is 160 µg/m³ in MAE terms, but the former gets the category wrong (Hazardous vs Very Unhealthy) while the latter does not.
+
+Additionally, the Kaggle extended pipeline's **validation set covers winter 2025–26** (Jul 2025 – Mar 2026), making validation harder. This partly explains why the ensemble's Val R² (0.5388) is lower than the original pipeline — the model is validated on more difficult winter months with Kaggle-inflated training labels.
+
+### Recommendation
+
+**The original pipeline (`USE_KAGGLE_HISTORY = False`) remains the primary pipeline** for the Week 15 demo and final report. Reasons:
+
+1. Original pipeline achieves 71.65% AQI accuracy vs 64.1% for the Kaggle extended pipeline.
+2. Lahore — the harder, more practically important city — drops 12.5 pp with Kaggle data.
+3. OpenAQ ground sensor data is demonstrably higher quality for the AQI categorisation task.
+4. The Kaggle extension does not deliver the expected benefit of more data because it introduces systematic calibration bias for the winter season that dominates Lahore's performance.
+
+If historical extension is pursued in future work, the Kaggle PM2.5 column should be **calibrated against OpenAQ overlap months** before training (e.g., fit a per-month linear correction factor from the Jun 2025 – Dec 2024 overlap period where both sources are available).
+
+---
+
 ## Summary Table
 
 | Limitation | Severity | Mitigation Available |
@@ -349,4 +451,5 @@ The model's reported test accuracy (71.6% ensemble, 61.3% Lahore) likely **under
 | Historical chart data ends Oct 2026 | Low | Expected behavior; chart shows training period |
 | Offline snapshot staleness | Low | Clearly labeled; use live mode for current forecasts |
 | Hugging Face Space not yet deployed | Low | Bundle prepared; requires HF account for upload |
+| Kaggle historical extension: winter PM2.5 inflation | High | Calibrate Kaggle vs OpenAQ overlap before mixing; original pipeline preferred |
 

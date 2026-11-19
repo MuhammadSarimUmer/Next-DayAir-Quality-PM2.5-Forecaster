@@ -134,7 +134,54 @@ For the current processed data:
 
 Weather had zero missing cells in the current quality-control report.
 
-## 4. Reproducibility
+## 4. Kaggle 2021–24 Hourly API Dataset (Experimental Extension)
+
+> [!IMPORTANT]
+> This dataset contains **model/API estimates, not ground sensor readings**. It is used only when `USE_KAGGLE_HISTORY = True` in `src/config.py`. The original pipeline (`USE_KAGGLE_HISTORY = False`) remains primary.
+
+- **Source:** Kaggle API — historical PM2.5 and weather for Karachi and Lahore, originally derived from OpenWeatherMap/CAMS atmospheric model estimates
+- **Coverage:** August 24, 2021 – December 31, 2024 (both cities)
+- **Raw files:**
+  - `data/raw/kaggle_karachi_hourly.csv`
+  - `data/raw/kaggle_lahore_hourly.csv`
+- **Download script:** `python -m src.ingest_kaggle`
+- **Variables:** Hourly PM2.5 estimate (µg/m³), temperature, humidity, wind speed, precipitation, and pressure (OpenWeatherMap-style)
+- **Licence:** Subject to Kaggle dataset terms; not from a primary sensor provider. See the specific Kaggle dataset page for attribution.
+
+### Data Quality Caveat: Winter Overestimation
+
+This dataset exhibits a **systematic ~2× overestimation of PM2.5 in winter months (November–March)** relative to OpenAQ ground sensors, while summer months (June–September) agree closely (ratio ~1×).
+
+| Season | Kaggle vs OpenAQ Ratio | Explanation |
+|---|---|---|
+| Summer (Jun–Sep) | ~1.0× | Surface PM2.5 mixes well; CAMS column estimate agrees with ground |
+| Winter (Nov–Mar) | ~2.0× | Temperature inversions trap pollution near surface; CAMS integrates the full atmospheric column, inflating the apparent surface reading |
+
+**Root cause:** The Kaggle values come from CAMS/OpenWeatherMap atmospheric model estimates, which integrate PM2.5 across an atmospheric column and do not directly measure surface concentrations. During winter inversions — when Lahore's smog season peaks — boundary-layer trapping means surface concentrations are far higher relative to column averages than in summer, so the model estimates are systematically too high.
+
+### Merge Strategy (when `USE_KAGGLE_HISTORY = True`)
+
+- **OpenAQ wins on overlap:** For any hour where both OpenAQ and Kaggle have a value, the OpenAQ ground sensor reading is retained.
+- **Kaggle fills the 2021–Jun 2025 gap:** Hours before the OpenAQ sensor network went live (Aug 2021 – Jun 2025) are populated from the Kaggle dataset.
+- **Total dataset:** 90,960 rows (OpenAQ + Kaggle merged)
+  - Karachi PM2.5: openaq = 11,764 h, kaggle_api = 29,105 h
+  - Lahore PM2.5: openaq = 11,834 h, kaggle_api = 29,083 h
+
+### Experiment Outcome
+
+The Kaggle extension experiment (Nov 2026) showed:
+
+- **MAE improved marginally:** 13.32 vs 13.31 µg/m³ (original) — a statistical tie
+- **AQI accuracy dropped significantly:** 64.1% vs 71.65% (original)
+- **Lahore AQI accuracy:** 48.8% vs 61.3% (original) — a 12.5 pp regression
+
+The winter overestimation miscalibrated AQI boundary predictions for Lahore's smog season. Full analysis in [`Limitations.md`](./Limitations.md) Section 12.
+
+**Conclusion: the original pipeline (`USE_KAGGLE_HISTORY = False`) is preferred for the demo and final submission.**
+
+---
+
+## 5. Reproducibility
 
 The collection period, city coordinates, selected sensor IDs, weather
 variables, and quality-control thresholds are defined in

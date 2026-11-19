@@ -286,8 +286,8 @@ non-empty folder that is not a previous Space bundle is refused rather than dele
 
 ```bash
 # 1. Clone
-git clone https://github.com/<your-username>/<repo-name>.git
-cd <repo-name>
+git clone https://github.com/MuhammadSarimUmer/Next-DayAir-Quality-PM2.5-Forecaster.git
+cd Next-DayAir-Quality-PM2.5-Forecaster
 
 # 2. Create environment
 python -m venv .venv

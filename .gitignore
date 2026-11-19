@@ -69,3 +69,9 @@ Desktop.ini
 # Project planning and decision docs (team internal)
 Model_Training.md
 improvement_ideas.md
+
+# Kaggle extension experiment outputs (not committed)
+data/kaggle_extended/
+models/kaggle_extended/
+reports/kaggle_extended/
+data/merged_data/

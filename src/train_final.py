@@ -32,7 +32,7 @@ from sklearn.linear_model import Ridge
 from lightgbm import LGBMRegressor
 
 
-MODELS_DIR = config.ROOT / "models"
+MODELS_DIR = config.ROOT / 'models'
 MODEL_PATH = MODELS_DIR / "final_pipeline.joblib"
 META_PATH = MODELS_DIR / "model_metadata.json"
 
