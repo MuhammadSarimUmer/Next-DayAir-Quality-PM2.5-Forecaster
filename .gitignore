@@ -37,6 +37,7 @@ reports/*
 !reports/figures/*.png
 !reports/error_analysis.md
 !reports/final_report.md
+!reports/final_report.pdf
 !reports/demo_script.md
 !reports/slides.md
 !reports/all_models_comparison.json
@@ -69,6 +70,13 @@ Desktop.ini
 # Project planning and decision docs (team internal)
 Model_Training.md
 improvement_ideas.md
+
+# Verification and helper documents (not for submission)
+QUICK_ANSWER.md
+PROJECT_VERIFICATION_REPORT.md
+IMPLEMENTATION_SUMMARY.md
+COMPLETION_CHECKLIST.md
+convert_to_pdf.py
 
 # Kaggle extension experiment outputs (not committed)
 data/kaggle_extended/

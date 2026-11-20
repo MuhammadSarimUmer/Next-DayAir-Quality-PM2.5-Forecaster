@@ -159,7 +159,7 @@ a different transformation than training.
 
 ### 5.3 Models and tuning
 
-Five candidates are compared:
+Seven candidates plus alternative approaches are compared:
 
 | Model | Purpose |
 |---|---|
@@ -169,6 +169,8 @@ Five candidates are compared:
 | Random Forest | Non-linear interactions, robust to outliers |
 | LightGBM | Gradient boosting, strong tabular performance |
 | Weighted ensemble | Combines Ridge (0.2), Random Forest (0.3), LightGBM (0.5) |
+| Prophet | Univariate time-series forecasting with trend and seasonality decomposition |
+| ARIMAX | Classical time-series with exogenous weather variables |
 
 Hyperparameters are tuned with 5-fold `TimeSeriesSplit`, which always trains on
 earlier data and validates on later data. The ensemble is selected when it is
@@ -189,10 +191,30 @@ two cities.
 
 The ensemble is selected by the documented preference rule.
 
-### 6.2 Final test evaluation
+### 6.2 Final test evaluation - All Models
 
 The winner is retrained on train + validation (19,471 rows) and evaluated once on
-the 3,492 held-out test hours.
+the 3,492 held-out test hours. All seven models plus two alternative time-series
+approaches are compared:
+
+| Model | MAE (µg/m³) | RMSE (µg/m³) | R² | AQI Category Accuracy |
+|---|---:|---:|---:|---:|
+| **Persistence Baseline** | 14.54 | 26.98 | 0.5700 | 69.99% |
+| Ridge Regression (α=10.0) | 10.23* | 15.29* | 0.2645* | 69.2%* |
+| KNN Regressor (k=15) | 9.08* | 14.18* | 0.3679* | 71.5%* |
+| Random Forest (d=12, n=120) | 8.43* | 13.67* | 0.4121* | 71.9%* |
+| LightGBM (lr=0.03, n=300) | 8.49* | 13.78* | 0.4023* | 71.9%* |
+| **Ensemble (Final)** | **13.31** | **23.65** | **0.6695** | **71.65%** |
+| Prophet (per-city avg) | 18.27 | 24.21 | 0.4821 | 54.95% |
+| ARIMAX (per-city avg) | 24.63 | 38.67 | -0.2660 | 48.08% |
+
+*Validation set metrics; test set metrics reported only for baseline, ensemble, Prophet, and ARIMAX.
+
+**Summary:** The ensemble improves over baseline by 8.5% on MAE and 1.66 pp on AQI accuracy. Prophet and ARIMAX underperform because:
+- **Prophet**: Rigid linear trend + additive seasonality cannot capture abrupt regime shifts (Lahore clean → Hazardous in 48h)
+- **ARIMAX**: Overfitted 2025 seasonal coefficients, applied blindly to 2026 which was 30% cleaner in Aug-Oct; crashed with m=24 seasonal period, forced to use m=12
+
+**Detailed breakdown:**
 
 | Metric | Persistence baseline | Final ensemble | Change |
 |---|---:|---:|---:|
@@ -212,7 +234,7 @@ The model improves both cities' MAE and improves Lahore's AQI accuracy by 3.4
 percentage points. The large remaining Karachi–Lahore gap is the dominant
 limitation and is analysed next.
 
-### 6.3 Alternative post-processing
+### 6.3 Alternative post-processing and Kaggle Extension
 
 Two optional adjustments were evaluated and **not enabled by default**:
 
@@ -225,6 +247,22 @@ Two optional adjustments were evaluated and **not enabled by default**:
 Neither improved the held-out metrics on this split, so the deployed service uses
 raw ensemble output. The experimental code remains in `src/postprocess.py` and
 `src/evaluate.py` for transparency.
+
+**Kaggle Historical Data Extension:** An alternative pipeline with Kaggle 2021-2024 
+historical data (augmenting OpenAQ training) was also tested:
+
+| Metric | Original Pipeline | Kaggle Extended | Verdict |
+|---|---:|---:|---|
+| MAE | **13.31** | 13.32 | Statistical tie |
+| RMSE | **23.65** | 21.00 | Kaggle better |
+| R² | **0.6695** | 0.5388 | Original better |
+| AQI Accuracy | **71.65%** | 64.1% | **Original 7.55 pp better** |
+| Lahore AQI | **61.3%** | 48.8% | **Original 12.5 pp better** |
+
+**The original pipeline is preferred** because AQI category accuracy (the primary user-facing
+metric) dropped significantly with Kaggle data, especially for Lahore. The training distribution
+mismatch (Kaggle API series vs OpenAQ ground sensors, plus a 2024-2025 gap) degraded
+categorical boundary predictions despite similar MAE.
 
 ## 7. Error Analysis
 
