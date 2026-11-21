@@ -21,7 +21,7 @@ ensemble of Ridge, Random Forest, and LightGBM is selected. On the untouched tes
 split it achieves **MAE 13.31 µg/m³, RMSE 23.65, R² 0.6695, and 71.6% AQI-category
 accuracy**, beating the persistence baseline (MAE 14.54, AQI 70.0%). The prediction
 is converted into a US EPA AQI category and actionable health advice and served
-through a Streamlit app, a FastAPI `/predict` endpoint, a live Hugging Face Space,
+through a live public [Streamlit Community Cloud App](https://next-dayair-quality-pm25-forecaster-zr6fsjrpswidhgflw7hayv.streamlit.app/), a FastAPI `/predict` endpoint, a live Hugging Face Space,
 and a published model card on Hugging Face Hub.
 
 ---
@@ -327,7 +327,8 @@ regulatory compliance.
 |---|---|---|
 | HF Model Hub | [MuhammadSarimUmer/next-day-pm25-forecaster](https://huggingface.co/MuhammadSarimUmer/next-day-pm25-forecaster) | Published Model Card and pipeline weights on the HF Hub |
 | HF Live Space | [MuhammadSarimUmer/next-day-air-quality-forecaster](https://huggingface.co/spaces/MuhammadSarimUmer/next-day-air-quality-forecaster) | Live public interactive forecasting app with trajectory and advice |
-| Streamlit app | `app.py` / `app/streamlit_app.py` | Interactive city forecast, confidence intervals, trajectory plot, manual AQI simulator |
+| Streamlit Cloud (Live) | [next-dayair-quality-pm25-forecaster.streamlit.app](https://next-dayair-quality-pm25-forecaster-zr6fsjrpswidhgflw7hayv.streamlit.app/) | Deployed public interactive dashboard on Streamlit Community Cloud |
+| Streamlit Local | `app.py` / `app/streamlit_app.py` | Local interactive city forecast, confidence intervals, trajectory plot, manual AQI simulator |
 | FastAPI | `src/api.py` / `app/api.py` | Local demo REST backend (`GET /health`, `POST /predict`, `POST /aqi`) with HTML demo UI |
 | Live input builder | `src/live_data.py` | Fetch recent OpenAQ/Open-Meteo/CAMS, align in PKT, build latest complete feature row |
 | Shared inference | `src/predict.py` | Load pipeline, predict, attach AQI/advice |
@@ -418,6 +419,7 @@ sensor limitations, is part of the result rather than an afterthought.
 
 ### Appendix: Key Artefacts
 
+- [Live Streamlit Cloud Application](https://next-dayair-quality-pm25-forecaster-zr6fsjrpswidhgflw7hayv.streamlit.app/) — Deployed public application on Streamlit Community Cloud
 - [Hugging Face Model Card & Pipeline](https://huggingface.co/MuhammadSarimUmer/next-day-pm25-forecaster) — Published weights and documentation
 - [Live Hugging Face Space](https://huggingface.co/spaces/MuhammadSarimUmer/next-day-air-quality-forecaster) — Public interactive application
 - `models/final_pipeline.joblib` — deployed 47-feature ensemble
