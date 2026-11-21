@@ -21,8 +21,8 @@ ensemble of Ridge, Random Forest, and LightGBM is selected. On the untouched tes
 split it achieves **MAE 13.31 µg/m³, RMSE 23.65, R² 0.6695, and 71.6% AQI-category
 accuracy**, beating the persistence baseline (MAE 14.54, AQI 70.0%). The prediction
 is converted into a US EPA AQI category and actionable health advice and served
-through a Streamlit app, a FastAPI `/predict` endpoint, and a Hugging Face
-Spaces-ready deployment bundle.
+through a Streamlit app, a FastAPI `/predict` endpoint, a live Hugging Face Space,
+and a published model card on Hugging Face Hub.
 
 ---
 
@@ -323,13 +323,14 @@ regulatory compliance.
 
 ## 9. Product and Deployment
 
-| Component | File | Purpose |
+| Component | Target / File | Purpose |
 |---|---|---|
-| Live input builder | `src/live_data.py` | Fetch recent OpenAQ/Open-Meteo/CAMS, align in PKT, build the latest complete feature row; fallback snapshot when offline |
+| HF Model Hub | [MuhammadSarimUmer/next-day-pm25-forecaster](https://huggingface.co/MuhammadSarimUmer/next-day-pm25-forecaster) | Published Model Card and pipeline weights on the HF Hub |
+| HF Live Space | [MuhammadSarimUmer/next-day-air-quality-forecaster](https://huggingface.co/spaces/MuhammadSarimUmer/next-day-air-quality-forecaster) | Live public interactive forecasting app with trajectory and advice |
+| Streamlit app | `app.py` / `app/streamlit_app.py` | Interactive city forecast, confidence intervals, trajectory plot, manual AQI simulator |
+| FastAPI | `src/api.py` / `app/api.py` | Local demo REST backend (`GET /health`, `POST /predict`, `POST /aqi`) with HTML demo UI |
+| Live input builder | `src/live_data.py` | Fetch recent OpenAQ/Open-Meteo/CAMS, align in PKT, build latest complete feature row |
 | Shared inference | `src/predict.py` | Load pipeline, predict, attach AQI/advice |
-| Streamlit app | `app/streamlit_app.py` | Interactive city forecast, input snapshot, freshness, manual AQI simulator |
-| FastAPI | `app/api.py` | `GET /health`, `POST /predict`, `POST /aqi`, `GET /metadata` |
-| HF Spaces | `deploy/huggingface/` | Space README, requirements, and `prepare_space.py` bundler |
 
 The deployed model is `models/final_pipeline.joblib` with metadata in
 `models/model_metadata.json`. If `OPENAQ_API_KEY` is unavailable or a source is
@@ -401,9 +402,7 @@ uvicorn app.api:app --reload --port 8000
 - FastAPI: `/health` 200, `/predict` 200 (offline and caller-supplied features),
   `/aqi` 200, unknown city 422, incomplete feature row 422, non-numeric feature
   row 422.
-- Hugging Face bundle: `prepare_space.py` produced a 39-file bundle (31.9 MB,
-  including the history CSV and seven figures) locally; the actual Space upload is
-  left to the account owner as requested.
+- Hugging Face Hub & Space: Deployed and verified live. Model card and pipeline weights published at [MuhammadSarimUmer/next-day-pm25-forecaster](https://huggingface.co/MuhammadSarimUmer/next-day-pm25-forecaster); live interactive web application running at [MuhammadSarimUmer/next-day-air-quality-forecaster](https://huggingface.co/spaces/MuhammadSarimUmer/next-day-air-quality-forecaster).
 
 ## 12. Conclusion
 
@@ -419,6 +418,8 @@ sensor limitations, is part of the result rather than an afterthought.
 
 ### Appendix: Key Artefacts
 
+- [Hugging Face Model Card & Pipeline](https://huggingface.co/MuhammadSarimUmer/next-day-pm25-forecaster) — Published weights and documentation
+- [Live Hugging Face Space](https://huggingface.co/spaces/MuhammadSarimUmer/next-day-air-quality-forecaster) — Public interactive application
 - `models/final_pipeline.joblib` — deployed 47-feature ensemble
 - `models/model_metadata.json` — metrics, feature list, training timestamp
 - `reports/error_analysis.md` — full error analysis and figures
